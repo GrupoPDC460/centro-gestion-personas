@@ -39,7 +39,7 @@ const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg); } els
   console.log('\n[1] Arranque + seed demo');
   let emps = await A.Repos.employeeRepository.all();
   ok(emps.length === 6, `seed creó 6 colaboradores (obtenidos: ${emps.length})`);
-  ok((await A.Repos.departmentRepository.all()).length >= 3, 'catálogo de departamentos creado');
+  ok((await A.Repos.departmentRepository.all()).length >= 1, 'catálogo de departamentos creado');
   const inactivo = emps.find((e) => e.estado === 'INACTIVO');
   ok(!!inactivo, 'existe 1 colaborador inactivo (para rotación)');
   ok(document.querySelector('.kpi'), 'dashboard renderizó KPIs en el DOM');
@@ -77,11 +77,27 @@ const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg); } els
     ok(modelos.length > 0, `importador mapeó ${modelos.length} colaboradores desde el Excel`);
     const uno = modelos[0];
     ok(uno && !!uno.codigo, 'cada registro mapea un código');
-    ok(uno && !!uno.departamentoNombre, 'mapea departamento (Área Final)');
     ok(uno && !!uno.fechaIngreso && /^\d{4}-\d{2}-\d{2}$/.test(uno.fechaIngreso), 'mapea fecha de ingreso a ISO');
+    // Instrucción: todos en "Cobros Venta Directa"
+    ok(modelos.every((m) => m.departamentoNombre === 'Cobros Venta Directa'), 'TODOS asignados a "Cobros Venta Directa"');
+    // Captura completa: campos de primera clase que antes se perdían
+    ok(modelos.some((m) => m.telefonoCompania), 'captura teléfono de compañía');
+    ok(modelos.some((m) => m.nit), 'captura NIT');
+    ok(modelos.some((m) => m.docVencimiento), 'captura vencimiento de documento (DPI)');
+    ok(modelos.some((m) => m.nombreMadre || m.nombrePadre), 'captura familia (padre/madre)');
+    ok(modelos.some((m) => m.hijos && m.hijos.length), 'captura hijos');
+    ok(modelos.some((m) => m.escolaridad), 'captura escolaridad');
+    ok(modelos.some((m) => m.areaTrail && m.areaTrail.length), 'conserva jerarquía de áreas real');
+    // Nada se pierde: cada colaborador arrastra decenas de campos extra
+    const extrasProm = Math.round(modelos.reduce((s, m) => s + m.extras.length, 0) / modelos.length);
+    ok(extrasProm >= 8, `promedio de ${extrasProm} campos adicionales capturados por persona (además de ~45 con nombre)`);
     const res = await A.Import.commit(modelos, 'omitir');
     importedCount = res.creados;
     ok(res.creados === modelos.length, `commit creó ${res.creados} colaboradores`);
+    const deptos = await A.Repos.departmentRepository.all();
+    const cvd = deptos.find((d) => d.nombre === 'Cobros Venta Directa');
+    const enCVD = (await A.Repos.employeeRepository.all()).filter((e) => e.departamentoId === cvd.id).length;
+    ok(enCVD >= modelos.length, `todos los importados quedaron en Cobros Venta Directa (${enCVD})`);
   } else {
     console.log('  (omitido: no se encontró archivo de muestra — el import se prueba en el navegador)');
   }

@@ -96,17 +96,28 @@
           </div>
           <div class="cols cols--2">
             <div class="card"><h3 class="card__title">Información personal</h3>
-              ${line('Código', e.codigo)}${line('Código JDE', e.codigoJDE)}${line('Documento', e.documentoId)}
+              ${line('Código', e.codigo)}${line('Código JDE', e.codigoJDE)}
               ${line('Nacimiento', U().fechaCorta(e.fechaNacimiento) + (edad != null ? ` (${edad} años)` : ''))}
-              ${line('Género', e.genero)}${line('Estado civil', e.estadoCivil)}${line('Escolaridad', e.escolaridad)}
-              ${line('Celular', e.celular)}${line('Correo personal', e.correoPersonal)}
-              ${line('País', e.pais)}${line('Dirección', e.direccion)}</div>
+              ${line('Género', e.genero)}${line('Estado civil', e.estadoCivil)}
+              ${line('Celular', e.celular)}${line('Tel. compañía', e.telefonoCompania)}${line('Tel. casa', e.telefonoCasa)}
+              ${line('Correo personal', e.correoPersonal)}${line('Correo corporativo', e.correoCorporativo)}
+              ${line('País', e.pais)}${line('Depto./Estado', e.divGeo1)}${line('Municipio', e.divGeo2)}
+              ${line('Dirección', e.direccion)}${line('Escolaridad', e.escolaridad)}
+              ${line('Carrera', e.carrera)}${line('Postgrados', e.postgrados)}${line('Enf. crónicas', e.enfermedadesCronicas)}</div>
             <div class="card"><h3 class="card__title">Información laboral</h3>
-              ${line('Departamento', depName(e))}${line('Puesto', posName(e))}${line('Rol', e.rol)}${line('Grado', e.grado)}
-              ${line('Tipo', e.tipoColaborador)}${line('Ingreso', U().fechaCorta(e.fechaIngreso))}
-              ${line('Antigüedad', ant.text)}${line('Jefe inmediato', e.jefeNombre)}
-              ${line('Sitio', e.sitio)}${line('Sociedad', e.sociedad)}${line('Estado actual', ubicLabel(e.ubicacionActual))}
+              ${line('Departamento', depName(e))}${line('Puesto', posName(e))}${line('Especialidad', e.especialidad)}${line('Título', e.titulo)}
+              ${line('Rol', e.rol)}${line('Grado', e.grado)}${line('Equipo a cargo', e.equipoACargo)}
+              ${line('Tipo', e.tipoColaborador)}${line('Tipo de contrato', e.tipoContrato)}
+              ${line('Ingreso', U().fechaCorta(e.fechaIngreso))}${line('Antigüedad', ant.text)}
+              ${line('Jefe inmediato', e.jefeNombre)}${line('Último líder', e.ultimoLiderNombre)}${line('Reclutador', e.reclutador)}
+              ${line('Sitio', e.sitio)}${line('Sociedad', e.sociedad)}${line('Empresa', e.empresa)}
+              ${e.areaTrail && e.areaTrail.length ? line('Área (jerarquía)', e.areaTrail.join(' › ')) : ''}
+              ${line('Estado actual', ubicLabel(e.ubicacionActual))}
               ${e.estado === 'INACTIVO' ? line('Fecha de baja', U().fechaCorta(e.fechaBaja)) + line('Motivo', e.motivoBaja) : ''}</div>
+          </div>
+          <div class="cols cols--2">
+            ${cardFamilia(e)}
+            ${cardDocs(e)}
           </div>
           <div class="cols cols--2">
             <div class="card"><h3 class="card__title">Contacto de emergencia</h3>
@@ -114,7 +125,39 @@
             <div class="card"><h3 class="card__title">Historial de movimientos</h3>
               ${movs.length ? movs.map((m) => `<div class="mv"><span class="mv__tag mv__tag--${m.tipo}">${U().esc(m.tipo.replace('_', ' '))}</span><span>${U().fechaCorta(m.fecha)}</span><span class="muted">${U().esc(m.observaciones || '')}</span></div>`).join('') : '<p class="muted">Sin movimientos.</p>'}</div>
           </div>
+          ${cardExtras(e)}
         </div>`;
+
+      function cardFamilia(x) {
+        const hijos = (x.hijos || []).filter((h) => h && h.nombre);
+        const has = x.nombrePadre || x.nombreMadre || x.nombreConyuge || x.cantidadHijos || hijos.length;
+        if (!has) return '';
+        const hijosHtml = hijos.length
+          ? `<div class="fld"><span class="fld__l">Hijos</span><span class="fld__v">${hijos.map((h) => U().esc(h.nombre) + (h.genero ? ` (${U().esc(h.genero)})` : '')).join('<br>')}</span></div>`
+          : '';
+        return `<div class="card"><h3 class="card__title">Familia</h3>
+          ${line('Cónyuge', x.nombreConyuge)}${line('Padre', x.nombrePadre)}${line('Madre', x.nombreMadre)}
+          ${x.cantidadHijos ? line('Cantidad de hijos', x.cantidadHijos) : ''}${hijosHtml}</div>`;
+      }
+      function cardDocs(x) {
+        const has = x.documentoId || x.nit || x.seguroSocial || x.docVencimiento || x.automovil || x.motocicleta;
+        if (!has) return '';
+        const auto = x.automovil ? `${x.automovil}${x.licenciaAutoTipo ? ' · ' + x.licenciaAutoTipo : ''}${x.licenciaAutoVence ? ' · vence ' + U().fechaCorta(x.licenciaAutoVence) : ''}` : '';
+        const moto = x.motocicleta ? `${x.motocicleta}${x.licenciaMotoVence ? ' · vence ' + U().fechaCorta(x.licenciaMotoVence) : ''}` : '';
+        return `<div class="card"><h3 class="card__title">Documentos y vehículos</h3>
+          ${line('Documento (DPI)', x.documentoId)}
+          ${x.docEmision ? line('Emisión doc.', U().fechaCorta(x.docEmision)) : ''}${x.docVencimiento ? line('Vence doc.', U().fechaCorta(x.docVencimiento)) : ''}
+          ${line('NIT', x.nit)}${line('Seguro social', x.seguroSocial)}
+          ${auto ? line('Automóvil', auto) : ''}${moto ? line('Motocicleta', moto) : ''}</div>`;
+      }
+      function cardExtras(x) {
+        const ex = (x.extras || []).filter((r) => r && r.k && r.v);
+        if (!ex.length) return '';
+        return `<div class="card" style="margin-top:16px">
+          <details><summary style="cursor:pointer;font-weight:800;font-size:.95rem">Datos adicionales importados (${ex.length})</summary>
+            <div style="margin-top:12px">${ex.map((r) => `<div class="fld"><span class="fld__l">${U().esc(r.k)}</span><span class="fld__v">${U().esc(r.v)}</span></div>`).join('')}</div>
+          </details></div>`;
+      }
       const mo = U().modal(html, { title: 'Ficha del colaborador', wide: true });
 
       function depName(x) { return (deptos.find((d) => d.id === x.departamentoId) || {}).nombre || '—'; }
