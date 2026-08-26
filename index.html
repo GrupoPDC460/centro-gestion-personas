@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centro de Gestión de Personas · Grupo PDC</title>
+  <meta name="description" content="Administración de personal, altas y bajas, rotación, cumpleaños y organigrama — Grupo PDC.">
+  <link rel="icon" href="assets/icons/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <span class="brand__mark" aria-hidden="true"></span>
+        <div class="brand__txt"><b>Grupo PDC</b><span>Gestión de Personas</span></div>
+      </div>
+      <nav class="nav">
+        <a class="nav__item" data-route="dashboard"    href="#dashboard"><span class="nav__ico">🏠</span>Dashboard</a>
+        <a class="nav__item" data-route="empleados"     href="#empleados"><span class="nav__ico">👥</span>Colaboradores</a>
+        <a class="nav__item" data-route="organizacion"  href="#organizacion"><span class="nav__ico">🏢</span>Organización</a>
+        <a class="nav__item" data-route="cumpleanos"    href="#cumpleanos"><span class="nav__ico">🎂</span>Cumpleaños</a>
+        <a class="nav__item" data-route="altas-bajas"   href="#altas-bajas"><span class="nav__ico">🔄</span>Altas y Bajas</a>
+        <a class="nav__item" data-route="rotacion"      href="#rotacion"><span class="nav__ico">📊</span>Rotación</a>
+        <a class="nav__item" data-route="emergencia"    href="#emergencia"><span class="nav__ico">🚨</span>Árbol de Emergencia</a>
+        <a class="nav__item" data-route="reportes"      href="#reportes"><span class="nav__ico">📋</span>Reportes</a>
+        <a class="nav__item" data-route="configuracion" href="#configuracion"><span class="nav__ico">⚙️</span>Configuración</a>
+      </nav>
+      <div class="sidebar__foot"><span class="muted">Datos locales · IndexedDB</span></div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main">
+      <header class="topbar">
+        <button class="icon-btn" id="menuBtn" aria-label="Menú">☰</button>
+        <div class="gsearch">
+          <input id="gs" class="input input--search" placeholder="Búsqueda global…" autocomplete="off">
+          <div id="gsResults" class="gs-results"></div>
+        </div>
+        <button class="icon-btn" id="themeBtn" aria-label="Cambiar tema">🌙</button>
+      </header>
+      <main class="content" id="view"></main>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts"></div>
+
+  <!-- Vendor -->
+  <script src="vendor/xlsx.full.min.js"></script>
+  <!-- Núcleo -->
+  <script src="js/db.js"></script>
+  <script src="js/repositories.js"></script>
+  <script src="js/calc.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/import.js"></script>
+  <script src="js/ui.js"></script>
+  <!-- Vistas -->
+  <script src="js/views/dashboard.js"></script>
+  <script src="js/views/employees.js"></script>
+  <script src="js/views/movements.js"></script>
+  <script src="js/views/organization.js"></script>
+  <script src="js/views/settings.js"></script>
+  <!-- Datos demo + arranque -->
+  <script src="data/demo-seed.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

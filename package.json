@@ -1,0 +1,14 @@
+{
+  "name": "centro-gestion-personas",
+  "version": "1.0.0",
+  "description": "Centro de Gestión de Personas — Grupo PDC. App web independiente (HTML/CSS/JS + IndexedDB) para administrar colaboradores, altas/bajas, rotación, cumpleaños y organigrama.",
+  "private": true,
+  "scripts": {
+    "start": "npx --yes serve .",
+    "test": "node test/smoke.js"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.0.0",
+    "jsdom": "^24.0.0"
+  }
+}

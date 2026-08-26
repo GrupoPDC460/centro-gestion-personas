@@ -1,0 +1,10 @@
+# Dependencias de desarrollo (sólo para pruebas; la app es estática)
+node_modules/
+# Nunca versionar secretos ni datos personales
+.env*
+!.env.example
+*.xlsx
+*.xls
+*.csv
+respaldo-*.json
+.DS_Store
