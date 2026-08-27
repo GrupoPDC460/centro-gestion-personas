@@ -4,9 +4,14 @@
 
   // Primer arranque: catálogos base + demo si la base está vacía.
   async function seedIfEmpty() {
+    // La demo se carga UNA sola vez (primer arranque). Si el usuario borra todo,
+    // NO se vuelve a sembrar: la base queda vacía y lista para importar.
+    const yaSembrado = await App.DB.get('config', 'seeded');
+    if (yaSembrado) return;
     const emps = await R.employeeRepository.all();
-    if (emps.length) return;
-    const seed = App.DEMO_SEED; if (!seed) return;
+    if (emps.length) { await App.DB.put('config', { key: 'seeded', value: true }); return; }
+    const seed = App.DEMO_SEED;
+    if (!seed) { await App.DB.put('config', { key: 'seeded', value: true }); return; }
     const depIds = []; for (const n of seed.departamentos) depIds.push(await R.departmentRepository.ensure(n));
     const pueIds = []; for (const n of seed.puestos) pueIds.push(await R.positionRepository.ensure(n));
     const tipIds = []; for (const n of seed.tipos) tipIds.push(await R.typeRepository.ensure(n));
@@ -26,6 +31,7 @@
       if (c.estado === 'INACTIVO') await R.movementRepository.add({ colaboradorId: id, tipo: 'BAJA', fecha: c.fechaBaja, observaciones: c.motivoBaja || 'Baja (demo)' });
       if (c.motivoBaja) await R.catalogRepository.ensure('motivoBaja', c.motivoBaja);
     }
+    await App.DB.put('config', { key: 'seeded', value: true });
     U.toast('Datos de ejemplo cargados. Impórtalos reales en Configuración.', 'info');
   }
 

@@ -38,23 +38,61 @@
         }
         return true;
       });
-      document.getElementById('cont').textContent = list.length;
-      if (!list.length) { document.getElementById('tabla').innerHTML = '<div class="empty"><h3>Sin resultados</h3><p>Ajusta los filtros o la búsqueda.</p></div>'; return; }
+      const tabla = document.getElementById('tabla');
+      const cont = document.getElementById('cont');
+      if (!tabla) return; // se navegó a otra vista mientras filtraba
+      if (cont) cont.textContent = list.length;
+      if (!list.length) { tabla.innerHTML = '<div class="empty"><h3>Sin resultados</h3><p>Ajusta los filtros o la búsqueda.</p></div>'; return; }
       const rows = await Promise.all(list.map(async (e) => {
         const ant = C().antiguedad(e.fechaIngreso);
+        const activo = e.estado === 'ACTIVO';
         return `<tr data-id="${e.id}" class="rowlink">
           <td class="cell-person">${await U().avatarHTML(e, 36)}<div><b>${U().esc(e.nombreCompleto)}</b><span class="muted">${U().esc(e.correoCorporativo || e.correoPersonal || '')}</span></div></td>
           <td>${U().esc(e.codigo)}<span class="muted"> · JDE ${U().esc(e.codigoJDE || '—')}</span></td>
           <td>${U().esc(depName[e.departamentoId] || '—')}</td>
           <td>${U().esc(posName[e.puestoId] || '—')}</td>
           <td>${ant.text}</td>
-          <td><span class="badge badge--${e.estado === 'ACTIVO' ? 'ok' : 'off'}">${e.estado === 'ACTIVO' ? 'Activo' : 'Inactivo'}</span></td>
+          <td><button class="badge badge--${activo ? 'ok' : 'off'} estado-btn" data-act="estado" data-id="${e.id}" title="Cambiar estado">${activo ? 'Activo' : 'Inactivo'} ▾</button></td>
+          <td class="acciones">
+            <button class="mini-act" data-act="editar" data-id="${e.id}" title="Editar">✎</button>
+            <button class="mini-act mini-act--danger" data-act="eliminar" data-id="${e.id}" title="Eliminar perfil">🗑</button>
+          </td>
         </tr>`;
       }));
-      document.getElementById('tabla').innerHTML = `<table class="table"><thead><tr>
-        <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado</th></tr></thead>
+      tabla.innerHTML = `<table class="table"><thead><tr>
+        <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado</th><th>Acciones</th></tr></thead>
         <tbody>${rows.join('')}</tbody></table>`;
-      document.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = () => ficha(+tr.dataset.id));
+      const byId = (id) => emps.find((x) => x.id === id);
+      tabla.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = (ev) => { if (ev.target.closest('[data-act]')) return; ficha(+tr.dataset.id); });
+      tabla.querySelectorAll('[data-act]').forEach((b) => b.onclick = async (ev) => {
+        ev.stopPropagation();
+        const e = byId(+b.dataset.id); if (!e) return;
+        if (b.dataset.act === 'editar') return form(e);
+        if (b.dataset.act === 'eliminar') return eliminar(e);
+        if (b.dataset.act === 'estado') return toggleEstado(e, b);
+      });
+    }
+
+    // Menú rápido de estado sobre la cajita del colaborador.
+    async function toggleEstado(e, anchor) {
+      if (e.estado === 'ACTIVO') { bajaForm(e); }
+      else { reingreso(e); }
+    }
+
+    // Eliminación permanente (a solicitud): borra perfil + historial + foto + auditoría.
+    async function eliminar(e) {
+      const movs = await R().movementRepository.byColaborador(e.id);
+      const aviso = `Vas a ELIMINAR de forma permanente a <b>${U().esc(e.nombreCompleto)}</b>`
+        + (movs.length ? ` y sus <b>${movs.length}</b> movimiento(s) de historial` : '')
+        + `, además de su fotografía. Esta acción no se puede deshacer.<br><br>Si solo quieres desactivarlo, usa <b>Inactivo</b> en su lugar (conserva el historial).`;
+      const ok = await U().confirm(aviso, { title: 'Eliminar perfil', danger: true, ok: 'Eliminar definitivamente' });
+      if (!ok) return;
+      for (const m of movs) await R().movementRepository.remove(m.id);
+      await R().photoRepository.remove(e.id);
+      await R().auditRepository.add('ELIMINACION', e.id, 'perfil', e.nombreCompleto, 'eliminado');
+      await R().employeeRepository.remove(e.id);
+      U().toast('Perfil eliminado', 'ok');
+      App.UI.render();
     }
 
     document.getElementById('buscar').oninput = (e) => { st.q = e.target.value; pintar(); };
@@ -93,6 +131,7 @@
             <button class="btn btn--ghost" id="copyTel">Copiar teléfono</button>
             <button class="btn btn--primary" id="editBtn">Editar</button>
             ${e.estado === 'ACTIVO' ? '<button class="btn btn--danger" id="bajaBtn">Registrar baja</button>' : '<button class="btn btn--good" id="reingBtn">Reingreso</button>'}
+            <button class="btn btn--ghost" id="delBtn" title="Eliminar perfil">🗑 Eliminar</button>
           </div>
           <div class="cols cols--2">
             <div class="card"><h3 class="card__title">Información personal</h3>
@@ -167,6 +206,7 @@
       mo.el.querySelector('#copyTel').onclick = () => { navigator.clipboard && navigator.clipboard.writeText(e.celular || ''); U().toast('Teléfono copiado'); };
       const bb = mo.el.querySelector('#bajaBtn'); if (bb) bb.onclick = () => { mo.close(); bajaForm(e); };
       const rb = mo.el.querySelector('#reingBtn'); if (rb) rb.onclick = () => { mo.close(); reingreso(e); };
+      const db = mo.el.querySelector('#delBtn'); if (db) db.onclick = () => { mo.close(); eliminar(e); };
       // Foto
       const phBtn = mo.el.querySelector('#phBtn'), phInput = mo.el.querySelector('#phInput');
       phBtn.onclick = () => phInput.click();

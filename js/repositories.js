@@ -52,6 +52,7 @@ App.Repos = (function () {
       m.createdAt = now();
       return DB.add('movimientos', m);
     },
+    remove: (id) => DB.del('movimientos', id),
   };
 
   // -------------------- Catálogos --------------------

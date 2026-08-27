@@ -2,6 +2,11 @@
  * db.js — Capa de acceso a IndexedDB (Centro de Gestión de Personas)
  * Encapsula la base local. Ninguna vista habla con IndexedDB directamente:
  * lo hacen los repositorios (repositories.js) sobre esta capa.
+ *
+ * IMPORTANTE (persistencia): cada operación crea su transacción y emite la(s)
+ * petición(es) de forma SÍNCRONA dentro de ella, y resuelve en `oncomplete`.
+ * No se usa `await` entre crear la transacción y emitir la petición, porque en
+ * navegadores reales eso auto-cierra la transacción y las escrituras se pierden.
  * ==========================================================================*/
 window.App = window.App || {};
 
@@ -9,7 +14,6 @@ App.DB = (function () {
   const DB_NAME = 'cgp_grupopdc';
   const DB_VERSION = 1;
 
-  // Definición declarativa de object stores e índices.
   const STORES = {
     colaboradores: {
       keyPath: 'id', autoIncrement: true,
@@ -22,14 +26,14 @@ App.DB = (function () {
         ['pais', 'pais', { unique: false }],
       ],
     },
-    fotos:          { keyPath: 'id', autoIncrement: false, indexes: [] }, // id = id colaborador
+    fotos:          { keyPath: 'id', autoIncrement: false, indexes: [] },
     movimientos:    { keyPath: 'id', autoIncrement: true, indexes: [
       ['colaboradorId', 'colaboradorId', {}], ['tipo', 'tipo', {}], ['fecha', 'fecha', {}],
     ]},
     departamentos:  { keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
     puestos:        { keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
     tiposColaborador:{ keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
-    catalogos:      { keyPath: 'id', autoIncrement: true, indexes: [['tipo', 'tipo', {}]] }, // motivoBaja, ubicacion, pais, estado, movimiento
+    catalogos:      { keyPath: 'id', autoIncrement: true, indexes: [['tipo', 'tipo', {}]] },
     auditoria:      { keyPath: 'id', autoIncrement: true, indexes: [['fecha', 'fecha', {}], ['colaboradorId', 'colaboradorId', {}]] },
     config:         { keyPath: 'key', autoIncrement: false, indexes: [] },
   };
@@ -49,88 +53,59 @@ App.DB = (function () {
           }
         }
       };
-      req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
+      req.onsuccess = (e) => {
+        _db = e.target.result;
+        // Si otra pestaña pide subir versión, cerramos para no bloquear.
+        _db.onversionchange = () => { try { _db.close(); } catch (_) {} _db = null; };
+        resolve(_db);
+      };
       req.onerror = (e) => reject(e.target.error);
     });
   }
 
-  function tx(storeNames, mode) {
-    return open().then((db) => {
+  // Ejecuta `worker(stores, done)` de forma SÍNCRONA dentro de una transacción.
+  // worker debe emitir sus peticiones sin await; usa done(valor) para el resultado.
+  function run(storeNames, mode, worker) {
+    return open().then((db) => new Promise((resolve, reject) => {
+      let result;
       const t = db.transaction(storeNames, mode);
-      return t;
-    });
-  }
-
-  function _wrap(request) {
-    return new Promise((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+      const stores = Array.isArray(storeNames)
+        ? Object.fromEntries(storeNames.map((n) => [n, t.objectStore(n)]))
+        : t.objectStore(storeNames);
+      t.oncomplete = () => resolve(result);
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error || new Error('Transacción abortada'));
+      try {
+        worker(stores, (v) => { result = v; });
+      } catch (err) { reject(err); try { t.abort(); } catch (_) {} }
+    }));
   }
 
   // ---- CRUD genérico ----
-  async function put(store, value) {
-    const t = await tx(store, 'readwrite');
-    const res = await _wrap(t.objectStore(store).put(value));
-    return new Promise((resolve, reject) => {
-      t.oncomplete = () => resolve(res);
-      t.onerror = () => reject(t.error);
+  function put(store, value)  { return run(store, 'readwrite', (os, done) => { const r = os.put(value); r.onsuccess = () => done(r.result); }); }
+  function add(store, value)  { return run(store, 'readwrite', (os, done) => { const r = os.add(value); r.onsuccess = () => done(r.result); }); }
+  function get(store, key)    { return run(store, 'readonly',  (os, done) => { const r = os.get(key); r.onsuccess = () => done(r.result); }); }
+  function getAll(store)      { return run(store, 'readonly',  (os, done) => { const r = os.getAll(); r.onsuccess = () => done(r.result); }); }
+  function del(store, key)    { return run(store, 'readwrite', (os) => { os.delete(key); }); }
+  function clear(store)       { return run(store, 'readwrite', (os) => { os.clear(); }); }
+  function byIndex(store, indexName, value) {
+    return run(store, 'readonly', (os, done) => { const r = os.index(indexName).getAll(value); r.onsuccess = () => done(r.result); });
+  }
+
+  // Inserta muchos registros en UNA sola transacción (importación / restauración).
+  function bulkPut(store, values) {
+    return run(store, 'readwrite', (os, done) => {
+      const ids = [];
+      values.forEach((v) => { const r = os.put(v); r.onsuccess = () => ids.push(r.result); });
+      done(ids);
     });
   }
 
-  async function add(store, value) {
-    const t = await tx(store, 'readwrite');
-    const res = await _wrap(t.objectStore(store).add(value));
-    return new Promise((resolve, reject) => {
-      t.oncomplete = () => resolve(res);
-      t.onerror = () => reject(t.error);
+  // Vacía todos los stores en una sola transacción atómica.
+  function clearAll() {
+    return run(Object.keys(STORES), 'readwrite', (stores) => {
+      Object.values(stores).forEach((os) => os.clear());
     });
-  }
-
-  async function get(store, key) {
-    const t = await tx(store, 'readonly');
-    return _wrap(t.objectStore(store).get(key));
-  }
-
-  async function getAll(store) {
-    const t = await tx(store, 'readonly');
-    return _wrap(t.objectStore(store).getAll());
-  }
-
-  async function del(store, key) {
-    const t = await tx(store, 'readwrite');
-    await _wrap(t.objectStore(store).delete(key));
-    return new Promise((resolve, reject) => { t.oncomplete = resolve; t.onerror = () => reject(t.error); });
-  }
-
-  async function clear(store) {
-    const t = await tx(store, 'readwrite');
-    await _wrap(t.objectStore(store).clear());
-    return new Promise((resolve, reject) => { t.oncomplete = resolve; t.onerror = () => reject(t.error); });
-  }
-
-  async function byIndex(store, indexName, value) {
-    const t = await tx(store, 'readonly');
-    const idx = t.objectStore(store).index(indexName);
-    return _wrap(idx.getAll(value));
-  }
-
-  // Inserta muchos registros en una sola transacción (para importación/restore).
-  async function bulkPut(store, values) {
-    const t = await tx(store, 'readwrite');
-    const os = t.objectStore(store);
-    const ids = [];
-    for (const v of values) {
-      ids.push(await _wrap(os.put(v)));
-    }
-    return new Promise((resolve, reject) => {
-      t.oncomplete = () => resolve(ids);
-      t.onerror = () => reject(t.error);
-    });
-  }
-
-  async function clearAll() {
-    for (const name of Object.keys(STORES)) { await clear(name); }
   }
 
   return { open, put, add, get, getAll, del, clear, byIndex, bulkPut, clearAll, STORES, DB_NAME };

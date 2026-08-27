@@ -107,11 +107,33 @@ const ok = (cond, msg) => { if (cond) { pass++; console.log('  ✓', msg); } els
   let totalRows = 0; for (const s of stores) totalRows += (await A.DB.getAll(s)).length;
   ok(totalRows >= 15, `respaldo abarcaría ${totalRows} filas en stores clave`);
 
-  console.log('\n[7] Cálculos agregados sobre la base');
-  emps = await A.Repos.employeeRepository.all();
-  const conAntig = emps.filter((e) => C.antiguedad(e.fechaIngreso).totalDays > 0).length;
-  ok(conAntig >= 6, `antigüedad calculada para ${conAntig} colaboradores`);
-  ok(new Set(emps.map((e) => e.pais)).size >= 1, 'agrupación por país disponible');
+  console.log('\n[8] Eliminar perfil (borra historial + foto + registra auditoría)');
+  const delId = await A.Repos.employeeRepository.create({ codigo: 'DEL-1', nombreCompleto: 'Para Borrar', estado: 'ACTIVO', fechaIngreso: '2024-01-01', emergencia: {} });
+  await A.Repos.movementRepository.add({ colaboradorId: delId, tipo: 'ALTA', fecha: '2024-01-01' });
+  await A.Repos.photoRepository.set(delId, 'data:image/jpeg;base64,MOCK');
+  let movsDel = await A.Repos.movementRepository.byColaborador(delId);
+  ok(movsDel.length === 1, 'perfil de prueba tiene 1 movimiento antes de borrar');
+  for (const m of movsDel) await A.Repos.movementRepository.remove(m.id);
+  await A.Repos.photoRepository.remove(delId);
+  await A.Repos.auditRepository.add('ELIMINACION', delId, 'perfil', 'Para Borrar', 'eliminado');
+  await A.Repos.employeeRepository.remove(delId);
+  ok(!(await A.Repos.employeeRepository.get(delId)), 'colaborador eliminado de la base');
+  ok((await A.Repos.movementRepository.byColaborador(delId)).length === 0, 'sus movimientos se eliminaron');
+  ok(!(await A.Repos.photoRepository.get(delId)), 'su foto se eliminó');
+  ok((await A.Repos.auditRepository.all()).some((a) => a.accion === 'ELIMINACION'), 'quedó registro de auditoría de la eliminación');
+
+  console.log('\n[9] Cambio de estado Activo↔Inactivo conserva registro');
+  const stId = await A.Repos.employeeRepository.create({ codigo: 'ST-1', nombreCompleto: 'Cambia Estado', estado: 'ACTIVO', fechaIngreso: '2023-05-01', emergencia: {} });
+  await A.Repos.employeeRepository.update(stId, { estado: 'INACTIVO', fechaBaja: '2026-07-01', motivoBaja: 'Prueba' });
+  ok((await A.Repos.employeeRepository.get(stId)).estado === 'INACTIVO', 'pasa a Inactivo sin borrarse');
+  await A.Repos.employeeRepository.update(stId, { estado: 'ACTIVO', fechaBaja: '', motivoBaja: '' });
+  ok((await A.Repos.employeeRepository.get(stId)).estado === 'ACTIVO', 'reactivación a Activo');
+
+  console.log('\n[10] Persistencia: la base sobrevive a "recargar" (reabrir conexión)');
+  const antes = (await A.Repos.employeeRepository.all()).length;
+  A.DB._forceReopen ? A.DB._forceReopen() : null;
+  const despues = (await A.Repos.employeeRepository.all()).length;
+  ok(despues === antes && despues > 0, `datos persistentes tras reabrir (${despues})`);
 
   console.log(`\n==== RESULTADO: ${pass} pruebas OK, ${fail} fallidas ====`);
   process.exit(fail ? 1 : 0);

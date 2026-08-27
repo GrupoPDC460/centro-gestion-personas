@@ -154,3 +154,10 @@ textarea.input { resize: vertical; }
 @keyframes fadeout { to { opacity: 0; } }
 @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } }
 @keyframes slidein { from { transform: translateX(20px); opacity: 0; } }
+
+/* ---------- Acciones de fila (lista de colaboradores) ---------- */
+.acciones { white-space: nowrap; }
+.estado-btn { border: 0; cursor: pointer; font-family: var(--font-display); }
+.mini-act { border: 1px solid var(--border); background: var(--surface); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: .85rem; margin-left: 4px; }
+.mini-act:hover { background: var(--surface-2); }
+.mini-act--danger:hover { background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red); border-color: var(--red); }
