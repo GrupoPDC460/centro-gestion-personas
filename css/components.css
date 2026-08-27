@@ -161,3 +161,15 @@ textarea.input { resize: vertical; }
 .mini-act { border: 1px solid var(--border); background: var(--surface); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: .85rem; margin-left: 4px; }
 .mini-act:hover { background: var(--surface-2); }
 .mini-act--danger:hover { background: color-mix(in srgb, var(--red) 20%, transparent); color: var(--red); border-color: var(--red); }
+
+/* ---------- Pantalla de inicio de sesión ---------- */
+.login-overlay { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 20px;
+  background:
+    radial-gradient(1000px 600px at 80% -10%, color-mix(in srgb, var(--navy) 40%, transparent), transparent 60%),
+    radial-gradient(800px 500px at -10% 110%, color-mix(in srgb, var(--celeste) 24%, transparent), transparent 55%),
+    linear-gradient(160deg, var(--bg-grad1), var(--bg-grad2)); }
+.login-card { width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px; display: flex; flex-direction: column; gap: 14px; }
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.login-brand b { font-family: var(--font-display); font-weight: 900; display: block; font-size: 1.02rem; }
+.login-brand span { font-size: .74rem; color: var(--muted); }

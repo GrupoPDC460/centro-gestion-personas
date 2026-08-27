@@ -1,5 +1,23 @@
 # Centro de Gestión de Personas — Grupo PDC
 
+> **Backend en la nube (Supabase).** Desde esta versión, los datos ya no viven en el
+> navegador: se almacenan de forma **centralizada en Supabase (PostgreSQL)**, con
+> acceso **multiusuario** desde cualquier equipo. El acceso está protegido con
+> **inicio de sesión** y **RLS por lista de autorizados** (solo usuarios autorizados
+> ven la información). Se aloja en un esquema propio de tablas `cgp_*` dentro del
+> proyecto Supabase, de forma independiente de la intranet y de Ford.
+>
+> - **Acceso:** pantalla de login (correo + contraseña). Cambia tu contraseña en
+>   *Configuración → Mi cuenta*.
+> - **Configuración de conexión:** `js/config.js` (URL + llave pública; la llave es
+>   pública por diseño, la seguridad la da el RLS).
+> - **Capa de datos:** `js/db.js` habla con Supabase manteniendo la misma interfaz
+>   que usaban los repositorios (las vistas no cambiaron). La versión anterior
+>   basada en IndexedDB queda como respaldo en `js/db.indexeddb.bak`.
+
+---
+
+
 Aplicación web **independiente** para administrar el personal de la organización: colaboradores, información personal y laboral, altas y bajas, reingresos, rotación, cumpleaños, aniversarios, contactos de emergencia y organigrama.
 
 > Proyecto **100% autónomo**. No comparte código, base de datos ni configuración con la intranet ni con ningún otro proyecto.

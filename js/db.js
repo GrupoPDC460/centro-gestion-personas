@@ -1,112 +1,109 @@
 /* ============================================================================
- * db.js — Capa de acceso a IndexedDB (Centro de Gestión de Personas)
- * Encapsula la base local. Ninguna vista habla con IndexedDB directamente:
- * lo hacen los repositorios (repositories.js) sobre esta capa.
- *
- * IMPORTANTE (persistencia): cada operación crea su transacción y emite la(s)
- * petición(es) de forma SÍNCRONA dentro de ella, y resuelve en `oncomplete`.
- * No se usa `await` entre crear la transacción y emitir la petición, porque en
- * navegadores reales eso auto-cierra la transacción y las escrituras se pierden.
+ * db.js — Capa de datos sobre Supabase (PostgreSQL)
+ * Mantiene EXACTAMENTE la misma API que la versión IndexedDB, de modo que los
+ * repositorios y las vistas no cambian. Modelo documento: cada fila guarda el
+ * objeto en `doc` (jsonb) + su llave primaria; en config se usa `value`.
+ * La seguridad la aplica el RLS de Supabase (solo usuarios autorizados).
  * ==========================================================================*/
 window.App = window.App || {};
 
 App.DB = (function () {
-  const DB_NAME = 'cgp_grupopdc';
-  const DB_VERSION = 1;
+  const SB = () => App.SB;
 
+  // store lógico -> tabla física
   const STORES = {
-    colaboradores: {
-      keyPath: 'id', autoIncrement: true,
-      indexes: [
-        ['codigo', 'codigo', { unique: false }],
-        ['codigoJDE', 'codigoJDE', { unique: false }],
-        ['estado', 'estado', { unique: false }],
-        ['departamentoId', 'departamentoId', { unique: false }],
-        ['puestoId', 'puestoId', { unique: false }],
-        ['pais', 'pais', { unique: false }],
-      ],
-    },
-    fotos:          { keyPath: 'id', autoIncrement: false, indexes: [] },
-    movimientos:    { keyPath: 'id', autoIncrement: true, indexes: [
-      ['colaboradorId', 'colaboradorId', {}], ['tipo', 'tipo', {}], ['fecha', 'fecha', {}],
-    ]},
-    departamentos:  { keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
-    puestos:        { keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
-    tiposColaborador:{ keyPath: 'id', autoIncrement: true, indexes: [['nombre', 'nombre', { unique: false }]] },
-    catalogos:      { keyPath: 'id', autoIncrement: true, indexes: [['tipo', 'tipo', {}]] },
-    auditoria:      { keyPath: 'id', autoIncrement: true, indexes: [['fecha', 'fecha', {}], ['colaboradorId', 'colaboradorId', {}]] },
-    config:         { keyPath: 'key', autoIncrement: false, indexes: [] },
+    colaboradores:    { table: 'cgp_colaboradores',    pk: 'id',  auto: true },
+    fotos:            { table: 'cgp_fotos',            pk: 'id',  auto: false },
+    movimientos:      { table: 'cgp_movimientos',      pk: 'id',  auto: true },
+    departamentos:    { table: 'cgp_departamentos',    pk: 'id',  auto: true },
+    puestos:          { table: 'cgp_puestos',          pk: 'id',  auto: true },
+    tiposColaborador: { table: 'cgp_tipos_colaborador', pk: 'id', auto: true },
+    catalogos:        { table: 'cgp_catalogos',        pk: 'id',  auto: true },
+    auditoria:        { table: 'cgp_auditoria',        pk: 'id',  auto: true },
+    config:           { table: 'cgp_config',           pk: 'key', auto: false, valueCol: 'value' },
   };
 
-  let _db = null;
+  const cols = (s) => (s.valueCol ? `${s.pk}, ${s.valueCol}` : `${s.pk}, doc`);
 
-  function open() {
-    if (_db) return Promise.resolve(_db);
-    return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = (e) => {
-        const db = e.target.result;
-        for (const [name, def] of Object.entries(STORES)) {
-          if (!db.objectStoreNames.contains(name)) {
-            const store = db.createObjectStore(name, { keyPath: def.keyPath, autoIncrement: def.autoIncrement });
-            (def.indexes || []).forEach(([idxName, keyPath, opts]) => store.createIndex(idxName, keyPath, opts || {}));
-          }
-        }
-      };
-      req.onsuccess = (e) => {
-        _db = e.target.result;
-        // Si otra pestaña pide subir versión, cerramos para no bloquear.
-        _db.onversionchange = () => { try { _db.close(); } catch (_) {} _db = null; };
-        resolve(_db);
-      };
-      req.onerror = (e) => reject(e.target.error);
-    });
+  // fila de la BD -> objeto de la app
+  function mapOut(s, row) {
+    if (!row) return undefined;
+    if (s.valueCol) return { [s.pk]: row[s.pk], value: row[s.valueCol] };
+    return Object.assign({}, row.doc || {}, { [s.pk]: row[s.pk] });
+  }
+  // objeto de la app -> fila para insertar/upsertar
+  function mapIn(s, value, includePk) {
+    if (s.valueCol) return { [s.pk]: value[s.pk], [s.valueCol]: value.value != null ? value.value : null };
+    const doc = Object.assign({}, value); delete doc[s.pk];
+    const row = { doc };
+    if (includePk && value[s.pk] != null) row[s.pk] = value[s.pk];
+    if (!s.auto && value[s.pk] != null) row[s.pk] = value[s.pk]; // fotos: id explícito
+    return row;
+  }
+  function fail(error) { throw new Error(error.message || 'Error de base de datos'); }
+
+  function open() { return Promise.resolve(true); } // el cliente ya está listo
+
+  async function getAll(store) {
+    const s = STORES[store];
+    const { data, error } = await SB().from(s.table).select(cols(s));
+    if (error) fail(error);
+    return (data || []).map((r) => mapOut(s, r));
   }
 
-  // Ejecuta `worker(stores, done)` de forma SÍNCRONA dentro de una transacción.
-  // worker debe emitir sus peticiones sin await; usa done(valor) para el resultado.
-  function run(storeNames, mode, worker) {
-    return open().then((db) => new Promise((resolve, reject) => {
-      let result;
-      const t = db.transaction(storeNames, mode);
-      const stores = Array.isArray(storeNames)
-        ? Object.fromEntries(storeNames.map((n) => [n, t.objectStore(n)]))
-        : t.objectStore(storeNames);
-      t.oncomplete = () => resolve(result);
-      t.onerror = () => reject(t.error);
-      t.onabort = () => reject(t.error || new Error('Transacción abortada'));
-      try {
-        worker(stores, (v) => { result = v; });
-      } catch (err) { reject(err); try { t.abort(); } catch (_) {} }
-    }));
+  async function get(store, key) {
+    const s = STORES[store];
+    const { data, error } = await SB().from(s.table).select(cols(s)).eq(s.pk, key).maybeSingle();
+    if (error) fail(error);
+    return data ? mapOut(s, data) : undefined;
   }
 
-  // ---- CRUD genérico ----
-  function put(store, value)  { return run(store, 'readwrite', (os, done) => { const r = os.put(value); r.onsuccess = () => done(r.result); }); }
-  function add(store, value)  { return run(store, 'readwrite', (os, done) => { const r = os.add(value); r.onsuccess = () => done(r.result); }); }
-  function get(store, key)    { return run(store, 'readonly',  (os, done) => { const r = os.get(key); r.onsuccess = () => done(r.result); }); }
-  function getAll(store)      { return run(store, 'readonly',  (os, done) => { const r = os.getAll(); r.onsuccess = () => done(r.result); }); }
-  function del(store, key)    { return run(store, 'readwrite', (os) => { os.delete(key); }); }
-  function clear(store)       { return run(store, 'readwrite', (os) => { os.clear(); }); }
-  function byIndex(store, indexName, value) {
-    return run(store, 'readonly', (os, done) => { const r = os.index(indexName).getAll(value); r.onsuccess = () => done(r.result); });
+  async function add(store, value) {
+    const s = STORES[store];
+    const row = mapIn(s, value, false);
+    const { data, error } = await SB().from(s.table).insert(row).select(s.pk).single();
+    if (error) fail(error);
+    return data[s.pk];
   }
 
-  // Inserta muchos registros en UNA sola transacción (importación / restauración).
-  function bulkPut(store, values) {
-    return run(store, 'readwrite', (os, done) => {
-      const ids = [];
-      values.forEach((v) => { const r = os.put(v); r.onsuccess = () => ids.push(r.result); });
-      done(ids);
-    });
+  async function put(store, value) {
+    const s = STORES[store];
+    const row = mapIn(s, value, true);
+    const { data, error } = await SB().from(s.table).upsert(row).select(s.pk).single();
+    if (error) fail(error);
+    return data[s.pk];
   }
 
-  // Vacía todos los stores en una sola transacción atómica.
-  function clearAll() {
-    return run(Object.keys(STORES), 'readwrite', (stores) => {
-      Object.values(stores).forEach((os) => os.clear());
-    });
+  async function del(store, key) {
+    const s = STORES[store];
+    const { error } = await SB().from(s.table).delete().eq(s.pk, key);
+    if (error) fail(error);
   }
 
-  return { open, put, add, get, getAll, del, clear, byIndex, bulkPut, clearAll, STORES, DB_NAME };
+  async function clear(store) {
+    const s = STORES[store];
+    const { error } = await SB().from(s.table).delete().not(s.pk, 'is', null);
+    if (error) fail(error);
+  }
+
+  async function byIndex(store, indexName, value) {
+    // Filtro en cliente sobre el campo del doc (conjuntos pequeños).
+    const all = await getAll(store);
+    return all.filter((o) => String(o[indexName]) === String(value));
+  }
+
+  async function bulkPut(store, values) {
+    if (!values || !values.length) return [];
+    const s = STORES[store];
+    const rows = values.map((v) => mapIn(s, v, true));
+    const { data, error } = await SB().from(s.table).upsert(rows).select(s.pk);
+    if (error) fail(error);
+    return (data || []).map((d) => d[s.pk]);
+  }
+
+  async function clearAll() {
+    for (const k of Object.keys(STORES)) { await clear(k); }
+  }
+
+  return { open, get, getAll, put, add, del, clear, byIndex, bulkPut, clearAll, STORES, DB_NAME: 'cgp_supabase' };
 })();

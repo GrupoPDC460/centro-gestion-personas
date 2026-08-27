@@ -39,10 +39,33 @@ App.UI.route('configuracion', async function (main) {
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px">
+      <h3 class="card__title">Mi cuenta</h3>
+      <p class="muted" id="acctWho">—</p>
+      <div class="form-grid">
+        <label class="f"><span>Nueva contraseña</span><input class="input" id="np1" type="password" placeholder="••••••••"></label>
+        <label class="f"><span>Repetir contraseña</span><input class="input" id="np2" type="password" placeholder="••••••••"></label>
+      </div>
+      <div class="row-gap" style="margin-top:10px"><button class="btn btn--ghost" id="chgPass">Cambiar contraseña</button></div>
+    </div>
+
     <div class="card card--danger" style="margin-top:16px">
       <h3 class="card__title">Zona de peligro</h3>
-      <div class="row-gap"><button class="btn btn--danger" id="wipeBtn">Borrar TODOS los datos locales</button></div>
+      <p class="muted">Esto borra todos los colaboradores, movimientos, fotos y catálogos <b>de la base en la nube</b> (afecta a todos los usuarios). Úsalo con cuidado.</p>
+      <div class="row-gap"><button class="btn btn--danger" id="wipeBtn">Borrar TODOS los datos</button></div>
     </div>`;
+
+  // Mi cuenta
+  (async () => {
+    try { const u = await App.Auth.user(); if (u) document.getElementById('acctWho').textContent = 'Sesión: ' + (u.email || u.id); } catch (_) {}
+  })();
+  document.getElementById('chgPass').onclick = async () => {
+    const a = document.getElementById('np1').value, b = document.getElementById('np2').value;
+    if (a.length < 8) return U.toast('La contraseña debe tener al menos 8 caracteres', 'warn');
+    if (a !== b) return U.toast('Las contraseñas no coinciden', 'warn');
+    try { await App.Auth.changePassword(a); U.toast('Contraseña actualizada', 'ok'); document.getElementById('np1').value = ''; document.getElementById('np2').value = ''; }
+    catch (e) { U.toast(e.message, 'err'); }
+  };
 
   // Catálogos: agregar / eliminar
   main.querySelectorAll('[data-add]').forEach((b) => b.onclick = async () => {
@@ -98,7 +121,7 @@ App.UI.route('configuracion', async function (main) {
     try { await U.restore(f); App.UI.render(); } catch (err) { U.toast(err.message, 'err'); }
   };
   document.getElementById('wipeBtn').onclick = async () => {
-    if (!(await U.confirm('Se borrarán TODOS los colaboradores, movimientos, fotos y catálogos locales. Esta acción no se puede deshacer.', { danger: true, ok: 'Borrar todo' }))) return;
+    if (!(await U.confirm('Se borrarán TODOS los colaboradores, movimientos, fotos y catálogos <b>de la base en la nube</b>. Afecta a todos los usuarios y no se puede deshacer.', { danger: true, ok: 'Borrar todo' }))) return;
     await App.DB.clearAll(); U.toast('Datos borrados', 'ok'); App.UI.render();
   };
 });

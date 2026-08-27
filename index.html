@@ -11,9 +11,24 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="css/components.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/config.js"></script>
 </head>
 <body>
-  <div class="app">
+  <!-- Pantalla de inicio de sesión -->
+  <div id="login" class="login-overlay">
+    <form class="login-card" id="loginForm" autocomplete="on">
+      <div class="login-brand"><span class="brand__mark" aria-hidden="true"></span>
+        <div><b>Centro de Gestión de Personas</b><span>Grupo PDC</span></div></div>
+      <label class="f"><span>Correo</span><input class="input" id="loginEmail" type="email" placeholder="tu@grupopdc.com" autocomplete="username" required></label>
+      <label class="f"><span>Contraseña</span><input class="input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" required></label>
+      <button class="btn btn--primary" type="submit" id="loginBtn" style="width:100%;justify-content:center">Ingresar</button>
+      <div id="loginErr" class="banner banner--err" style="display:none"></div>
+      <p class="muted" style="text-align:center">Acceso restringido · datos protegidos en la nube</p>
+    </form>
+  </div>
+
+  <div class="app" id="appRoot" style="display:none">
     <!-- Sidebar -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
@@ -43,6 +58,7 @@
           <div id="gsResults" class="gs-results"></div>
         </div>
         <button class="icon-btn" id="themeBtn" aria-label="Cambiar tema">🌙</button>
+        <button class="icon-btn" id="logoutBtn" aria-label="Cerrar sesión" title="Cerrar sesión">⎋</button>
       </header>
       <main class="content" id="view"></main>
     </div>
@@ -53,6 +69,7 @@
   <!-- Vendor -->
   <script src="vendor/xlsx.full.min.js"></script>
   <!-- Núcleo -->
+  <script src="js/supabase.js"></script>
   <script src="js/db.js"></script>
   <script src="js/repositories.js"></script>
   <script src="js/calc.js"></script>

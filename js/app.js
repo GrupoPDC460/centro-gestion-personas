@@ -58,15 +58,52 @@
     document.addEventListener('click', (e) => { if (!e.target.closest('.gsearch')) document.getElementById('gsResults').classList.remove('open'); });
   }
 
-  try {
-    await App.DB.open();
+  const $ = (id) => document.getElementById(id);
+  let arrancada = false;
+
+  function mostrarLogin(msg) {
+    $('login').style.display = 'flex';
+    $('appRoot').style.display = 'none';
+    if (msg) { const e = $('loginErr'); e.textContent = msg; e.style.display = 'block'; }
+  }
+  async function mostrarApp() {
+    $('login').style.display = 'none';
+    $('appRoot').style.display = '';
+    if (arrancada) return;
+    arrancada = true;
     await U.initTheme();
-    await seedIfEmpty();
     wireChrome();
     window.addEventListener('hashchange', U.render);
     await U.render();
+  }
+
+  async function iniciarSesion(ev) {
+    ev.preventDefault();
+    const btn = $('loginBtn'); const err = $('loginErr');
+    err.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Ingresando…';
+    try {
+      await App.Auth.signIn($('loginEmail').value, $('loginPass').value);
+      // La verificación de "autorizado" la impone el RLS: si no lo está, no verá datos.
+      await mostrarApp();
+    } catch (e) {
+      const m = /Invalid login/i.test(e.message) ? 'Correo o contraseña incorrectos.' : e.message;
+      mostrarLogin(m);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Ingresar';
+    }
+  }
+
+  if (!App.SB) { mostrarLogin('No se pudo cargar Supabase. Revisa tu conexión.'); return; }
+
+  $('loginForm').addEventListener('submit', iniciarSesion);
+  $('logoutBtn') && ($('logoutBtn').onclick = async () => { await App.Auth.signOut(); location.reload(); });
+
+  // Si hay sesión activa, entra directo; si no, muestra login.
+  try {
+    const sesion = await App.Auth.session();
+    if (sesion) await mostrarApp(); else mostrarLogin();
   } catch (e) {
-    console.error(e);
-    document.getElementById('view').innerHTML = `<div class="empty"><h3>No se pudo iniciar</h3><p>${U.esc(e.message)}</p><p class="muted">Si abriste el archivo con doble clic, algunos navegadores limitan IndexedDB en file://. Publica en Vercel/GitHub Pages o usa un servidor local.</p></div>`;
+    mostrarLogin(e.message);
   }
 })();
