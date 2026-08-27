@@ -175,7 +175,8 @@ App.Import = (function () {
       [rec.primerNombre, rec.segundoNombre, rec.primerApellido, rec.segundoApellido].map(clean).filter(Boolean).join(' ');
     const emg = [rec.emgN1, rec.emgN2, rec.emgA1, rec.emgA2].map(clean).filter(Boolean).join(' ');
     const estadoRaw = clean(rec.estadoRaw).toLowerCase();
-    const estado = estadoRaw.startsWith('inact') || clean(rec.fechaBaja) ? 'INACTIVO' : 'ACTIVO';
+    const fechaBajaISO = toISO(rec.fechaBaja); // '' si es centinela
+    const estado = (estadoRaw.startsWith('inact') || fechaBajaISO) ? 'INACTIVO' : 'ACTIVO';
 
     const hijos = [];
     for (let n = 1; n <= 5; n++) {

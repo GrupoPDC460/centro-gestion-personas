@@ -69,7 +69,9 @@ a { color: inherit; }
   text-decoration: none; color: var(--muted); font-weight: 700; font-size: .9rem; position: relative;
   transition: background .15s, color .15s;
 }
-.nav__ico { width: 20px; text-align: center; filter: grayscale(.2); }
+.nav__ico { width: 18px; height: 18px; flex: 0 0 auto; stroke: currentColor; opacity: .85; }
+.nav__item:hover .nav__ico, .nav__item--active .nav__ico { opacity: 1; }
+.nav__item--active .nav__ico { color: var(--orange); }
 .nav__item:hover { background: var(--surface); color: var(--text); }
 .nav__item--active { color: var(--text); background: var(--surface-2); }
 .nav__item--active::before {

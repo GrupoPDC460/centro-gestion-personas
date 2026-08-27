@@ -173,3 +173,10 @@ textarea.input { resize: vertical; }
 .login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .login-brand b { font-family: var(--font-display); font-weight: 900; display: block; font-size: 1.02rem; }
 .login-brand span { font-size: .74rem; color: var(--muted); }
+
+/* ---------- Selects compactos en la lista (estado / ubicación) ---------- */
+.estado-cell { white-space: nowrap; }
+.mini-select { font-size: .78rem; font-weight: 700; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer; max-width: 130px; }
+.mini-select.ubic-sel { margin-top: 5px; color: var(--muted); font-weight: 600; }
+.mini-select:focus { outline: 2px solid color-mix(in srgb, var(--celeste) 70%, transparent); }

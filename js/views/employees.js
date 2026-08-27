@@ -24,6 +24,7 @@
       <div id="tabla" class="table-wrap"></div>`;
 
     const st = { q: '', dep: '', pue: '', est: '', gen: '', ant: '' };
+    const UBIC = [['EN_SITIO', 'En sitio'], ['REMOTO', 'Remoto'], ['VACACIONES', 'Vacaciones'], ['PERMISO', 'Permiso'], ['INCAPACIDAD', 'Incapacidad'], ['AUSENTE', 'Ausente']];
     async function pintar() {
       const q = st.q.toLowerCase();
       let list = emps.filter((e) => {
@@ -52,7 +53,15 @@
           <td>${U().esc(depName[e.departamentoId] || '—')}</td>
           <td>${U().esc(posName[e.puestoId] || '—')}</td>
           <td>${ant.text}</td>
-          <td><button class="badge badge--${activo ? 'ok' : 'off'} estado-btn" data-act="estado" data-id="${e.id}" title="Cambiar estado">${activo ? 'Activo' : 'Inactivo'} ▾</button></td>
+          <td class="estado-cell">
+            <select class="mini-select estado-sel" data-id="${e.id}" title="Estado">
+              <option value="ACTIVO" ${activo ? 'selected' : ''}>🟢 Activo</option>
+              <option value="INACTIVO" ${!activo ? 'selected' : ''}>⚪ Inactivo</option>
+            </select>
+            <select class="mini-select ubic-sel" data-id="${e.id}" title="Ubicación / situación">
+              ${UBIC.map(([v, l]) => `<option value="${v}" ${(e.ubicacionActual || 'EN_SITIO') === v ? 'selected' : ''}>${l}</option>`).join('')}
+            </select>
+          </td>
           <td class="acciones">
             <button class="mini-act" data-act="editar" data-id="${e.id}" title="Editar">✎</button>
             <button class="mini-act mini-act--danger" data-act="eliminar" data-id="${e.id}" title="Eliminar perfil">🗑</button>
@@ -60,23 +69,47 @@
         </tr>`;
       }));
       tabla.innerHTML = `<table class="table"><thead><tr>
-        <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado</th><th>Acciones</th></tr></thead>
+        <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado / Ubicación</th><th>Acciones</th></tr></thead>
         <tbody>${rows.join('')}</tbody></table>`;
       const byId = (id) => emps.find((x) => x.id === id);
-      tabla.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = (ev) => { if (ev.target.closest('[data-act]')) return; ficha(+tr.dataset.id); });
+      tabla.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = (ev) => { if (ev.target.closest('[data-act]') || ev.target.closest('select')) return; ficha(+tr.dataset.id); });
       tabla.querySelectorAll('[data-act]').forEach((b) => b.onclick = async (ev) => {
         ev.stopPropagation();
         const e = byId(+b.dataset.id); if (!e) return;
         if (b.dataset.act === 'editar') return form(e);
         if (b.dataset.act === 'eliminar') return eliminar(e);
-        if (b.dataset.act === 'estado') return toggleEstado(e, b);
+      });
+      tabla.querySelectorAll('.estado-sel').forEach((s) => {
+        s.onclick = (ev) => ev.stopPropagation();
+        s.onchange = async (ev) => { ev.stopPropagation(); await cambiarEstado(byId(+s.dataset.id), s.value); };
+      });
+      tabla.querySelectorAll('.ubic-sel').forEach((s) => {
+        s.onclick = (ev) => ev.stopPropagation();
+        s.onchange = async (ev) => {
+          ev.stopPropagation();
+          const e = byId(+s.dataset.id); if (!e) return;
+          await R().employeeRepository.update(e.id, { ubicacionActual: s.value });
+          e.ubicacionActual = s.value;
+          U().toast('Ubicación actualizada', 'ok');
+        };
       });
     }
 
-    // Menú rápido de estado sobre la cajita del colaborador.
-    async function toggleEstado(e, anchor) {
-      if (e.estado === 'ACTIVO') { bajaForm(e); }
-      else { reingreso(e); }
+    // Cambio de estado fácil (Activo/Inactivo) con historial y auditoría.
+    async function cambiarEstado(e, nuevo) {
+      if (!e || e.estado === nuevo) return;
+      const hoy = new Date().toISOString().slice(0, 10);
+      if (nuevo === 'INACTIVO') {
+        await R().employeeRepository.update(e.id, { estado: 'INACTIVO', fechaBaja: hoy });
+        await R().movementRepository.add({ colaboradorId: e.id, tipo: 'BAJA', fecha: hoy, observaciones: 'Baja (cambio rápido)' });
+        await R().auditRepository.add('BAJA', e.id, 'estado', 'ACTIVO', 'INACTIVO');
+      } else {
+        await R().employeeRepository.update(e.id, { estado: 'ACTIVO', fechaBaja: '', motivoBaja: '', tipoBaja: '' });
+        await R().movementRepository.add({ colaboradorId: e.id, tipo: 'REINGRESO', fecha: hoy, observaciones: 'Reactivación (cambio rápido)' });
+        await R().auditRepository.add('REINGRESO', e.id, 'estado', 'INACTIVO', 'ACTIVO');
+      }
+      U().toast('Estado actualizado', 'ok');
+      App.UI.render();
     }
 
     // Eliminación permanente (a solicitud): borra perfil + historial + foto + auditoría.

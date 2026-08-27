@@ -5,17 +5,20 @@
  * ==========================================================================*/
 (function (root) {
   function parseDate(v) {
-    if (!v) return null;
-    if (v instanceof Date) return isNaN(v) ? null : v;
-    // Soporta 'YYYY-MM-DD', ISO, y serial de Excel numérico.
-    if (typeof v === 'number') { // serial Excel (día 1 = 1900-01-01)
-      const d = new Date(Date.UTC(1899, 11, 30) + v * 86400000);
-      return isNaN(d) ? null : d;
+    if (v == null || v === '') return null;
+    let d = null;
+    if (v instanceof Date) { d = isNaN(v) ? null : v; }
+    else if (typeof v === 'number') { const t = new Date(Date.UTC(1899, 11, 30) + v * 86400000); d = isNaN(t) ? null : t; }
+    else {
+      const s = String(v).trim();
+      if (!s) return null;
+      const t = new Date(s.length <= 10 ? s + 'T00:00:00' : s);
+      d = isNaN(t) ? null : t;
     }
-    const s = String(v).trim();
-    if (!s || /^1900-01-01/.test(s)) return null; // centinela "no aplica"
-    const d = new Date(s.length <= 10 ? s + 'T00:00:00' : s);
-    return isNaN(d) ? null : d;
+    if (!d) return null;
+    // Centinela de Excel para "vacío / no aplica" (1899-12-30/31, 1900-01-01): descartar.
+    if (d.getFullYear() < 1950) return null;
+    return d;
   }
 
   // Diferencia calendario años/meses/días entre dos fechas.
