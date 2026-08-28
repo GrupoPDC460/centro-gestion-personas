@@ -16,7 +16,18 @@ App.UI.route('organizacion', async function (main) {
 
   // ---- Estado del diagrama ----
   const cfg = (await R.orgChartRepository.load()) || {};
-  let nodos = Array.isArray(cfg.nodos) ? cfg.nodos.slice() : [];
+  // Tolerancia a diagramas guardados por versiones anteriores (nombre/parent/puesto).
+  const normalizar = (n) => ({
+    id: n.id || uidSeguro(),
+    empId: n.empId != null ? n.empId : null,
+    titulo: n.titulo || n.nombre || '',
+    subtitulo: n.subtitulo || n.puesto || '',
+    padre: n.padre || n.parent || null,
+    color: ['navy', 'celeste', 'naranja', 'dorado', 'verde', 'gris'].includes(n.color) ? n.color : 'celeste',
+    x: Number(n.x) || 0, y: Number(n.y) || 0,
+  });
+  function uidSeguro() { return 'n' + Math.random().toString(36).slice(2, 9); }
+  let nodos = Array.isArray(cfg.nodos) ? cfg.nodos.map(normalizar) : [];
   const view = Object.assign({ x: 40, y: 30, k: 1 }, cfg.view || {});
   let seleccion = null, panelAbierto = true, guardando = null;
 
@@ -26,6 +37,15 @@ App.UI.route('organizacion', async function (main) {
   ];
   const W = 190, H = 78;                      // tamaño de caja
   const uid = () => 'n' + Math.random().toString(36).slice(2, 9);
+
+  // Si un nodo quedó sin título pero está ligado a una persona, se recupera de ella.
+  nodos.forEach((n) => {
+    if (n.empId && porId.has(n.empId)) {
+      const e = porId.get(n.empId);
+      if (!n.titulo) n.titulo = e.nombreCompleto || '';
+      if (!n.subtitulo) n.subtitulo = puestoNombre(e);
+    }
+  });
 
   // Primera vez: generar el diagrama desde la jefatura conocida.
   let recienGenerado = false;
@@ -61,44 +81,107 @@ App.UI.route('organizacion', async function (main) {
     return autoLayout(out);
   }
 
-  // Acomodo en árbol sin cruces: cada rama reserva su propio ancho.
+  // Acomodo en árbol compacto: las hojas de un mismo jefe se apilan en bloques
+  // de varias filas (por defecto 5 por fila) para no crecer a lo ancho.
   function autoLayout(list) {
+    const PORFILA = Math.max(2, Number(view.porFila) || 5);
     const hijos = new Map(); const raices = [];
     list.forEach((n) => { if (n.padre && list.some((x) => x.id === n.padre)) { if (!hijos.has(n.padre)) hijos.set(n.padre, []); hijos.get(n.padre).push(n); } else raices.push(n); });
-    // Orden estable por título para que no bailen entre recargas
     hijos.forEach((arr) => arr.sort((a, b) => String(a.titulo).localeCompare(String(b.titulo))));
     raices.sort((a, b) => String(a.titulo).localeCompare(String(b.titulo)));
 
-    const GX = 34, GY = 132;
-    // Ancho que ocupa cada subárbol (en píxeles)
-    const anchoCache = new Map();
+    const GX = 30, GY = 128, GYB = 96;
+    const esHoja = (n) => !(hijos.get(n.id) || []).length;
+    const cache = new Map();
+
+    // Ancho que ocupa un nodo con su subárbol
     const ancho = (n, g = 0) => {
-      if (anchoCache.has(n.id)) return anchoCache.get(n.id);
+      if (cache.has(n.id)) return cache.get(n.id);
       const kids = g > 30 ? [] : (hijos.get(n.id) || []);
-      const w = !kids.length ? W : kids.reduce((s, k, i) => s + ancho(k, g + 1) + (i ? GX : 0), 0);
+      let w;
+      if (!kids.length) w = W;
+      else {
+        const hojas = kids.filter(esHoja), ramas = kids.filter((k) => !esHoja(k));
+        // Las hojas se agrupan en bloque de PORFILA columnas
+        const colsHojas = hojas.length ? Math.min(PORFILA, hojas.length) : 0;
+        const wHojas = colsHojas ? colsHojas * W + (colsHojas - 1) * GX : 0;
+        const wRamas = ramas.reduce((s, k, i) => s + ancho(k, g + 1) + (i ? GX : 0), 0);
+        w = Math.max(wHojas + (wRamas && wHojas ? GX : 0) + wRamas, W);
+      }
       const r = Math.max(W, w);
-      anchoCache.set(n.id, r);
+      cache.set(n.id, r);
       return r;
     };
-    // Colocar centrando al padre sobre el bloque de sus hijos
+
     const ubicar = (n, izq, depth) => {
       const kids = hijos.get(n.id) || [];
       const w = ancho(n);
-      n.y = depth * GY;
+      n.y = yDeNivel(depth);
       if (!kids.length) { n.x = Math.round(izq + (w - W) / 2); return; }
+      const hojas = kids.filter(esHoja), ramas = kids.filter((k) => !esHoja(k));
       let cursor = izq;
-      kids.forEach((k) => { const kw = ancho(k); ubicar(k, cursor, depth + 1); cursor += kw + GX; });
-      const first = kids[0], last = kids[kids.length - 1];
-      n.x = Math.round((first.x + last.x) / 2);
+      // 1) Ramas con descendencia, cada una con su ancho
+      ramas.forEach((k) => { const kw = ancho(k); ubicar(k, cursor, depth + 1); cursor += kw + GX; });
+      // 2) Hojas en bloque de PORFILA por fila (compacto)
+      if (hojas.length) {
+        const cols = Math.min(PORFILA, hojas.length);
+        hojas.forEach((k, i) => {
+          const col = i % cols, fila = Math.floor(i / cols);
+          k.x = Math.round(cursor + col * (W + GX));
+          k.y = yDeNivel(depth + 1) + fila * GYB;
+        });
+        cursor += cols * W + (cols - 1) * GX;
+      }
+      // Centrar al padre sobre todo el bloque de sus hijos
+      const xs = kids.map((k) => k.x);
+      n.x = Math.round((Math.min(...xs) + Math.max(...xs)) / 2);
     };
+
+    // Altura acumulada de cada nivel: considera cuántas filas ocupa el nivel previo.
+    const filasPorNivel = {};
+    const medir = (n, depth, g = 0) => {
+      const kids = g > 30 ? [] : (hijos.get(n.id) || []);
+      filasPorNivel[depth] = Math.max(filasPorNivel[depth] || 1, 1);
+      const hojas = kids.filter(esHoja);
+      if (hojas.length) {
+        const cols = Math.min(PORFILA, hojas.length);
+        const filas = Math.ceil(hojas.length / cols);
+        filasPorNivel[depth + 1] = Math.max(filasPorNivel[depth + 1] || 1, filas);
+      }
+      kids.filter((k) => !esHoja(k)).forEach((k) => medir(k, depth + 1, g + 1));
+    };
+    raices.forEach((r) => medir(r, 0));
+    const yCache = {};
+    function yDeNivel(d) {
+      if (yCache[d] != null) return yCache[d];
+      let y = 0;
+      for (let i = 0; i < d; i++) y += (filasPorNivel[i] > 1 ? (filasPorNivel[i] - 1) * GYB : 0) + GY;
+      yCache[d] = y;
+      return y;
+    }
+
     let x0 = 0;
-    raices.forEach((r) => { ubicar(r, x0, 0); x0 += ancho(r) + GX * 3; });
+    raices.forEach((r) => { ubicar(r, x0, 0); x0 += ancho(r) + GX * 2; });
     return list;
+  }
+
+  // Encuadra todo el diagrama dentro del área visible.
+  function ajustar() {
+    const canvas = main.querySelector('#canvas');
+    if (!canvas || !nodos.length) return;
+    const minX = Math.min(...nodos.map((n) => n.x)), maxX = Math.max(...nodos.map((n) => n.x + W));
+    const minY = Math.min(...nodos.map((n) => n.y)), maxY = Math.max(...nodos.map((n) => n.y + H));
+    const cw = canvas.clientWidth || 900, ch = canvas.clientHeight || 500;
+    const pad = 48;
+    const k = Math.min(1.2, Math.max(0.28, Math.min((cw - pad * 2) / Math.max(1, maxX - minX), (ch - pad * 2) / Math.max(1, maxY - minY))));
+    view.k = Math.round(k * 100) / 100;
+    view.x = Math.round((cw - (maxX - minX) * view.k) / 2 - minX * view.k);
+    view.y = Math.round((ch - (maxY - minY) * view.k) / 2 - minY * view.k);
   }
 
   const guardar = () => {
     clearTimeout(guardando);
-    guardando = setTimeout(() => R.orgChartRepository.save({ nodos, view }).catch(() => {}), 400);
+    guardando = setTimeout(() => R.orgChartRepository.save({ nodos, view, v2: true }).catch(() => {}), 400);
   };
 
   // ---------------- Render ----------------
@@ -108,6 +191,7 @@ App.UI.route('organizacion', async function (main) {
         <div><h1>Organización</h1><p class="muted">Organigrama editable · arrastra las cajas para acomodarlas</p></div>
         <div class="row-gap">
           <button class="btn btn--ghost btn--sm" id="autoBtn" title="Acomodar en árbol">✧ Auto-acomodar</button>
+          <button class="btn btn--ghost btn--sm" id="fitBtn" title="Ver todo">⤢ Ajustar</button>
           <button class="btn btn--ghost btn--sm" id="zoomOut">−</button>
           <button class="btn btn--ghost btn--sm" id="zoomIn">+</button>
           <button class="btn btn--primary btn--sm" id="addBtn">+ Nueva caja</button>
@@ -189,7 +273,8 @@ App.UI.route('organizacion', async function (main) {
     const canvas = main.querySelector('#canvas');
 
     main.querySelector('#addBtn').onclick = () => nuevaCaja();
-    main.querySelector('#autoBtn').onclick = () => { nodos = autoLayout(nodos); guardar(); pintar(); };
+    main.querySelector('#autoBtn').onclick = () => { nodos = autoLayout(nodos); ajustar(); guardar(); pintar(); };
+    main.querySelector('#fitBtn').onclick = () => { ajustar(); guardar(); pintar(); };
     main.querySelector('#zoomIn').onclick = () => { view.k = Math.min(1.6, view.k + 0.1); guardar(); pintar(); };
     main.querySelector('#zoomOut').onclick = () => { view.k = Math.max(0.4, view.k - 0.1); guardar(); pintar(); };
     main.querySelector('#panelTab').onclick = () => {
@@ -262,6 +347,10 @@ App.UI.route('organizacion', async function (main) {
             <option value="curva" ${view.linea === 'curva' ? 'selected' : ''}>Curvas</option>
             <option value="recta" ${view.linea === 'recta' ? 'selected' : ''}>Rectas</option>
           </select></label>
+        <label class="f" style="margin-top:10px"><span>Personas por fila (compactar)</span>
+          <select class="input" id="pFila">
+            ${[3, 4, 5, 6, 8].map((n) => `<option value="${n}" ${(Number(view.porFila) || 5) === n ? 'selected' : ''}>${n} por fila</option>`).join('')}
+          </select></label>
         <div class="orgpanel__stats">
           <div><b>${nodos.length}</b><span class="muted">Cajas</span></div>
           <div><b>${nodos.filter((x) => !x.padre).length}</b><span class="muted">Nivel superior</span></div>
@@ -270,6 +359,8 @@ App.UI.route('organizacion', async function (main) {
       const b = body.querySelector('#pNueva'); if (b) b.onclick = () => nuevaCaja();
       const sl = body.querySelector('#pLinea');
       if (sl) sl.onchange = (ev) => { view.linea = ev.target.value; guardar(); pintar(); };
+      const sf = body.querySelector('#pFila');
+      if (sf) sf.onchange = (ev) => { view.porFila = +ev.target.value; nodos = autoLayout(nodos); ajustar(); guardar(); pintar(); };
       return;
     }
 
@@ -342,7 +433,13 @@ App.UI.route('organizacion', async function (main) {
   }
 
   marco();
-  if (recienGenerado) guardar();
+  if (recienGenerado) { nodos = autoLayout(nodos); ajustar(); guardar(); pintar(); }
+  else if (!cfg.v2) {
+    // Diagrama de una versión anterior: reacomodar con el layout compacto una vez.
+    nodos = autoLayout(nodos); ajustar();
+    R.orgChartRepository.save({ nodos, view, v2: true }).catch(() => {});
+    pintar();
+  }
 });
 
 /* views/emergency.js — Árbol de emergencia */
