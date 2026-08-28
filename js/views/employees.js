@@ -13,17 +13,30 @@
     main.innerHTML = `
       <div class="page-head"><div><h1>Colaboradores</h1><p class="muted"><span id="cont">${emps.length}</span> registros</p></div>
         <button class="btn btn--primary" id="nuevoBtn">+ Nuevo colaborador</button></div>
-      <div class="toolbar">
-        <input id="buscar" class="input input--search" placeholder="Buscar por nombre, código, JDE, correo o teléfono…" autocomplete="off">
-        <select id="fDep" class="input"><option value="">Todos los departamentos</option>${deptos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
-        <select id="fPue" class="input"><option value="">Todos los puestos</option>${puestos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
-        <select id="fEst" class="input"><option value="">Estado: todos</option><option value="ACTIVO">Activos</option><option value="INACTIVO">Inactivos</option></select>
-        <select id="fGen" class="input"><option value="">Género: todos</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option></select>
-        <select id="fAnt" class="input"><option value="">Antigüedad: toda</option>${Object.entries(C().CAT_ANTIGUEDAD).filter(([k]) => k !== 'sin_dato').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <div class="filters">
+        <div class="filters__row">
+          <input id="buscar" class="input input--search" placeholder="Buscar por nombre, código, JDE, correo o teléfono…" autocomplete="off">
+          <div class="viewtoggle" role="group" aria-label="Vista">
+            <button class="viewtoggle__b" data-view="cards" title="Tarjetas"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></button>
+            <button class="viewtoggle__b" data-view="table" title="Tabla"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+          </div>
+        </div>
+        <div class="filters__row">
+          <div class="segmented" id="segEstado">
+            <button class="segmented__b" data-est="">Todos</button>
+            <button class="segmented__b" data-est="ACTIVO">Activos</button>
+            <button class="segmented__b" data-est="INACTIVO">Inactivos</button>
+          </div>
+          <select id="fDep" class="input input--pill"><option value="">Departamento: todos</option>${deptos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
+          <select id="fPue" class="input input--pill"><option value="">Puesto: todos</option>${puestos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
+          <select id="fGen" class="input input--pill"><option value="">Género: todos</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option></select>
+          <select id="fAnt" class="input input--pill"><option value="">Antigüedad: toda</option>${Object.entries(C().CAT_ANTIGUEDAD).filter(([k]) => k !== 'sin_dato').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+          <button class="btn btn--ghost btn--sm" id="limpiar" title="Quitar filtros">Limpiar</button>
+        </div>
       </div>
       <div id="tabla" class="table-wrap"></div>`;
 
-    const st = { q: '', dep: '', pue: '', est: '', gen: '', ant: '' };
+    const st = { q: '', dep: '', pue: '', est: '', gen: '', ant: '', view: 'cards' };
     const UBIC = [['EN_SITIO', 'En sitio'], ['REMOTO', 'Remoto'], ['VACACIONES', 'Vacaciones'], ['PERMISO', 'Permiso'], ['INCAPACIDAD', 'Incapacidad'], ['AUSENTE', 'Ausente']];
     async function pintar() {
       const q = st.q.toLowerCase();
@@ -44,33 +57,59 @@
       if (!tabla) return; // se navegó a otra vista mientras filtraba
       if (cont) cont.textContent = list.length;
       if (!list.length) { tabla.innerHTML = '<div class="empty"><h3>Sin resultados</h3><p>Ajusta los filtros o la búsqueda.</p></div>'; return; }
-      const rows = await Promise.all(list.map(async (e) => {
-        const ant = C().antiguedad(e.fechaIngreso);
-        const activo = e.estado === 'ACTIVO';
-        return `<tr data-id="${e.id}" class="rowlink">
-          <td class="cell-person">${await U().avatarHTML(e, 36)}<div><b>${U().esc(e.nombreCompleto)}</b><span class="muted">${U().esc(e.correoCorporativo || e.correoPersonal || '')}</span></div></td>
-          <td>${U().esc(e.codigo)}<span class="muted"> · JDE ${U().esc(e.codigoJDE || '—')}</span></td>
-          <td>${U().esc(depName[e.departamentoId] || '—')}</td>
-          <td>${U().esc(posName[e.puestoId] || '—')}</td>
-          <td>${ant.text}</td>
-          <td class="estado-cell">
-            <select class="mini-select estado-sel" data-id="${e.id}" title="Estado">
-              <option value="ACTIVO" ${activo ? 'selected' : ''}>🟢 Activo</option>
-              <option value="INACTIVO" ${!activo ? 'selected' : ''}>⚪ Inactivo</option>
-            </select>
-            <select class="mini-select ubic-sel" data-id="${e.id}" title="Ubicación / situación">
+      const selEstado = (e) => `<select class="mini-select estado-sel" data-id="${e.id}" title="Estado">
+              <option value="ACTIVO" ${e.estado === 'ACTIVO' ? 'selected' : ''}>🟢 Activo</option>
+              <option value="INACTIVO" ${e.estado !== 'ACTIVO' ? 'selected' : ''}>⚪ Inactivo</option>
+            </select>`;
+      const selUbic = (e) => `<select class="mini-select ubic-sel" data-id="${e.id}" title="Ubicación / situación">
               ${UBIC.map(([v, l]) => `<option value="${v}" ${(e.ubicacionActual || 'EN_SITIO') === v ? 'selected' : ''}>${l}</option>`).join('')}
-            </select>
-          </td>
-          <td class="acciones">
-            <button class="mini-act" data-act="editar" data-id="${e.id}" title="Editar">✎</button>
-            <button class="mini-act mini-act--danger" data-act="eliminar" data-id="${e.id}" title="Eliminar perfil">🗑</button>
-          </td>
-        </tr>`;
-      }));
-      tabla.innerHTML = `<table class="table"><thead><tr>
-        <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado / Ubicación</th><th>Acciones</th></tr></thead>
-        <tbody>${rows.join('')}</tbody></table>`;
+            </select>`;
+      const acciones = (e) => `<button class="mini-act" data-act="editar" data-id="${e.id}" title="Editar">✎</button>
+            <button class="mini-act mini-act--danger" data-act="eliminar" data-id="${e.id}" title="Eliminar perfil">🗑</button>`;
+
+      if (st.view === 'cards') {
+        const cards = await Promise.all(list.map(async (e) => {
+          const ant = C().antiguedad(e.fechaIngreso);
+          const activo = e.estado === 'ACTIVO';
+          return `<article class="pcard rowlink ${activo ? '' : 'pcard--off'}" data-id="${e.id}">
+            <header class="pcard__top">
+              ${await U().avatarHTML(e, 52)}
+              <div class="pcard__id">
+                <b>${U().esc(e.nombreCompleto)}</b>
+                <span class="muted">${U().esc(posName[e.puestoId] || 'Sin puesto')}</span>
+              </div>
+              <span class="dot ${activo ? 'dot--ok' : 'dot--off'}" title="${activo ? 'Activo' : 'Inactivo'}"></span>
+            </header>
+            <div class="pcard__meta">
+              <span class="chip">${U().esc(e.codigo)}</span>
+              ${e.extensionIssabel ? `<span class="chip">Ext. ${U().esc(e.extensionIssabel)}</span>` : ''}
+              <span class="chip">${ant.years > 0 ? ant.years + ' año' + (ant.years === 1 ? '' : 's') : 'Nuevo'}</span>
+            </div>
+            ${e.correoCorporativo || e.celular ? `<div class="pcard__contact muted">${U().esc(e.correoCorporativo || e.celular)}</div>` : ''}
+            <footer class="pcard__foot">
+              <div class="pcard__sels">${selEstado(e)}${selUbic(e)}</div>
+              <div class="acciones">${acciones(e)}</div>
+            </footer>
+          </article>`;
+        }));
+        tabla.innerHTML = `<div class="pgrid">${cards.join('')}</div>`;
+      } else {
+        const rows = await Promise.all(list.map(async (e) => {
+          const ant = C().antiguedad(e.fechaIngreso);
+          return `<tr data-id="${e.id}" class="rowlink">
+            <td class="cell-person">${await U().avatarHTML(e, 36)}<div><b>${U().esc(e.nombreCompleto)}</b><span class="muted">${U().esc(e.correoCorporativo || e.correoPersonal || '')}</span></div></td>
+            <td>${U().esc(e.codigo)}<span class="muted"> · JDE ${U().esc(e.codigoJDE || '—')}</span></td>
+            <td>${U().esc(depName[e.departamentoId] || '—')}</td>
+            <td>${U().esc(posName[e.puestoId] || '—')}</td>
+            <td>${ant.text}</td>
+            <td class="estado-cell">${selEstado(e)}${selUbic(e)}</td>
+            <td class="acciones">${acciones(e)}</td>
+          </tr>`;
+        }));
+        tabla.innerHTML = `<table class="table"><thead><tr>
+          <th>Colaborador</th><th>Código</th><th>Departamento</th><th>Puesto</th><th>Antigüedad</th><th>Estado / Ubicación</th><th>Acciones</th></tr></thead>
+          <tbody>${rows.join('')}</tbody></table>`;
+      }
       const byId = (id) => emps.find((x) => x.id === id);
       tabla.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = (ev) => { if (ev.target.closest('[data-act]') || ev.target.closest('select')) return; ficha(+tr.dataset.id); });
       tabla.querySelectorAll('[data-act]').forEach((b) => b.onclick = async (ev) => {
@@ -131,10 +170,34 @@
     document.getElementById('buscar').oninput = (e) => { st.q = e.target.value; pintar(); };
     document.getElementById('fDep').onchange = (e) => { st.dep = e.target.value; pintar(); };
     document.getElementById('fPue').onchange = (e) => { st.pue = e.target.value; pintar(); };
-    document.getElementById('fEst').onchange = (e) => { st.est = e.target.value; pintar(); };
     document.getElementById('fGen').onchange = (e) => { st.gen = e.target.value; pintar(); };
     document.getElementById('fAnt').onchange = (e) => { st.ant = e.target.value; pintar(); };
     document.getElementById('nuevoBtn').onclick = () => form(null);
+
+    // Segmento de estado
+    const segs = document.querySelectorAll('#segEstado .segmented__b');
+    const marcarSeg = () => segs.forEach((b) => b.classList.toggle('is-on', b.dataset.est === st.est));
+    segs.forEach((b) => b.onclick = () => { st.est = b.dataset.est; marcarSeg(); pintar(); });
+    marcarSeg();
+
+    // Cambio de vista (tarjetas / tabla), recordado entre sesiones
+    const vbs = document.querySelectorAll('.viewtoggle__b');
+    const marcarVista = () => vbs.forEach((b) => b.classList.toggle('is-on', b.dataset.view === st.view));
+    vbs.forEach((b) => b.onclick = async () => {
+      st.view = b.dataset.view; marcarVista(); pintar();
+      try { await R().settingsRepository.set('vistaColaboradores', st.view); } catch (_) {}
+    });
+    R().settingsRepository.get('vistaColaboradores').then((v) => {
+      if (v && v !== st.view) { st.view = v; marcarVista(); pintar(); } else marcarVista();
+    }).catch(() => marcarVista());
+
+    // Limpiar filtros
+    document.getElementById('limpiar').onclick = () => {
+      st.q = ''; st.dep = ''; st.pue = ''; st.est = ''; st.gen = ''; st.ant = '';
+      document.getElementById('buscar').value = '';
+      ['fDep', 'fPue', 'fGen', 'fAnt'].forEach((id) => { document.getElementById(id).value = ''; });
+      marcarSeg(); pintar();
+    };
     await pintar();
     if (params && params.id) ficha(+params.id);
 
@@ -145,7 +208,9 @@
       const ant = C().antiguedad(e.fechaIngreso), edad = C().edad(e.fechaNacimiento);
       const movs = (await R().movementRepository.byColaborador(id)).sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
       const av = await U().avatarHTML(e, 92);
-      const line = (l, v) => `<div class="fld"><span class="fld__l">${l}</span><span class="fld__v">${U().esc(v || '—')}</span></div>`;
+      // Los campos sin información se omiten para reducir carga visual.
+      const vacio = (v) => v == null || String(v).trim() === '' || String(v).trim() === '—';
+      const line = (l, v) => (vacio(v) ? '' : `<div class="fld"><span class="fld__l">${l}</span><span class="fld__v">${U().esc(v)}</span></div>`);
       const html = `
         <div class="ficha">
           <div class="ficha__head">
@@ -198,6 +263,7 @@
             <div class="card"><h3 class="card__title">Historial de movimientos</h3>
               ${movs.length ? movs.map((m) => `<div class="mv"><span class="mv__tag mv__tag--${m.tipo}">${U().esc(m.tipo.replace('_', ' '))}</span><span>${U().fechaCorta(m.fecha)}</span><span class="muted">${U().esc(m.observaciones || '')}</span></div>`).join('') : '<p class="muted">Sin movimientos.</p>'}</div>
           </div>
+          <div id="ausWrap">${await App.Absences.cardHTML(e)}</div>
           ${cardExtras(e)}
         </div>`;
 
@@ -232,6 +298,14 @@
           </details></div>`;
       }
       const mo = U().modal(html, { title: 'Ficha del colaborador', wide: true });
+      // Ausencias: recargar la tarjeta tras cambios sin cerrar la ficha.
+      const refrescarAus = async () => {
+        const w = mo.el.querySelector('#ausWrap');
+        if (!w) return;
+        w.innerHTML = await App.Absences.cardHTML(e);
+        App.Absences.wire(w, e, refrescarAus);
+      };
+      App.Absences.wire(mo.el, e, refrescarAus);
 
       function depName(x) { return (deptos.find((d) => d.id === x.departamentoId) || {}).nombre || '—'; }
       function posName(x) { return (puestos.find((d) => d.id === x.puestoId) || {}).nombre || '—'; }
@@ -246,8 +320,10 @@
       phBtn.onclick = () => phInput.click();
       phInput.onchange = async () => {
         const f = phInput.files[0]; if (!f) return;
+        phInput.value = '';
         if (!/image\/(png|jpe?g|webp)/.test(f.type)) return U().toast('Formato no permitido', 'warn');
-        const dataUrl = await resizeImage(f, 400);
+        const dataUrl = await App.PhotoEditor.abrir(f, U());
+        if (!dataUrl) return; // cancelado
         await R().photoRepository.set(e.id, dataUrl);
         await R().auditRepository.add('CAMBIO_FOTO', e.id, 'foto', '', 'actualizada');
         U().toast('Fotografía actualizada'); mo.close(); ficha(id);
@@ -259,27 +335,92 @@
       const isNew = !e; e = e || { emergencia: {} };
       const opt = (list, sel, extra) => (extra ? `<option value="">— seleccionar —</option>` : '') + list.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${U().esc(x.nombre)}</option>`).join('');
       const f = (id, label, val, type, req) => `<label class="f"><span>${label}${req ? ' *' : ''}</span><input class="input" id="${id}" type="${type || 'text'}" value="${U().esc(val || '')}"></label>`;
-      const html = `<div class="form-grid">
-        ${f('f_codigo', 'Código', e.codigo, 'text', true)}
-        ${f('f_jde', 'Código JDE', e.codigoJDE)}
-        ${f('f_nom', 'Nombre completo', e.nombreCompleto, 'text', true)}
-        ${f('f_nac', 'Fecha de nacimiento', e.fechaNacimiento, 'date')}
-        <label class="f"><span>Género</span><select class="input" id="f_gen"><option value="">—</option><option ${/^m/i.test(e.genero) ? 'selected' : ''}>Masculino</option><option ${/^f/i.test(e.genero) ? 'selected' : ''}>Femenino</option></select></label>
-        ${f('f_cel', 'Celular', e.celular)}
-        ${f('f_cor', 'Correo corporativo', e.correoCorporativo, 'email')}
-        ${f('f_corp', 'Correo personal', e.correoPersonal, 'email')}
-        ${f('f_pais', 'País', e.pais)}
-        <label class="f"><span>Departamento</span><select class="input" id="f_dep">${opt(deptos, e.departamentoId, true)}</select></label>
-        <label class="f"><span>Puesto</span><select class="input" id="f_pue">${opt(puestos, e.puestoId, true)}</select></label>
-        <label class="f"><span>Tipo</span><select class="input" id="f_tip">${opt(tipos, e.tipoColaboradorId, true)}</select></label>
-        ${f('f_ing', 'Fecha de ingreso', e.fechaIngreso, 'date', true)}
-        ${f('f_jefe', 'Jefe inmediato', e.jefeNombre)}
-        <label class="f"><span>Estado actual</span><select class="input" id="f_ubic">${['EN_SITIO', 'REMOTO', 'VACACIONES', 'PERMISO', 'INCAPACIDAD', 'AUSENTE'].map((u) => `<option value="${u}" ${e.ubicacionActual === u ? 'selected' : ''}>${ubicLabel(u)}</option>`).join('')}</select></label>
-        ${f('f_emgN', 'Contacto emergencia', e.emergencia && e.emergencia.nombre)}
-        ${f('f_emgP', 'Parentesco', e.emergencia && e.emergencia.parentesco)}
-        ${f('f_emgT', 'Teléfono emergencia', e.emergencia && e.emergencia.telefono)}
-        <label class="f f--full"><span>Observaciones</span><textarea class="input" id="f_obs" rows="2">${U().esc(e.observaciones || '')}</textarea></label>
-      </div>`;
+      const html = `
+        <h4 class="form-sec">Identificación</h4>
+        <div class="form-grid">
+          ${f('f_codigo', 'Código', e.codigo, 'text', true)}
+          ${f('f_jde', 'Código JDE', e.codigoJDE)}
+          ${f('f_nom', 'Nombre completo', e.nombreCompleto, 'text', true)}
+          ${f('f_doc', 'Documento (DPI)', e.documentoId)}
+          ${f('f_docE', 'Emisión documento', e.docEmision, 'date')}
+          ${f('f_docV', 'Vencimiento documento', e.docVencimiento, 'date')}
+          ${f('f_nit', 'NIT', e.nit)}
+          ${f('f_ss', 'Seguro social', e.seguroSocial)}
+        </div>
+
+        <h4 class="form-sec">Datos personales</h4>
+        <div class="form-grid">
+          ${f('f_nac', 'Fecha de nacimiento', e.fechaNacimiento, 'date')}
+          <label class="f"><span>Género</span><select class="input" id="f_gen"><option value="">—</option><option ${/^m/i.test(e.genero) ? 'selected' : ''}>Masculino</option><option ${/^f/i.test(e.genero) ? 'selected' : ''}>Femenino</option></select></label>
+          ${f('f_ecivil', 'Estado civil', e.estadoCivil)}
+          ${f('f_esc', 'Escolaridad', e.escolaridad)}
+          ${f('f_carr', 'Carrera', e.carrera)}
+          ${f('f_post', 'Postgrados', e.postgrados)}
+          ${f('f_esptec', 'Especialización técnica', e.especializacionTecnica)}
+          ${f('f_enf', 'Enfermedades crónicas', e.enfermedadesCronicas)}
+        </div>
+
+        <h4 class="form-sec">Contacto</h4>
+        <div class="form-grid">
+          ${f('f_cel', 'Celular', e.celular)}
+          ${f('f_telc', 'Teléfono compañía', e.telefonoCompania)}
+          ${f('f_telcorp', 'Teléfono corporativo', e.telefonoCorporativo)}
+          ${f('f_telcasa', 'Teléfono casa', e.telefonoCasa)}
+          ${f('f_cor', 'Correo corporativo', e.correoCorporativo, 'email')}
+          ${f('f_corp', 'Correo personal', e.correoPersonal, 'email')}
+          ${f('f_pais', 'País', e.pais)}
+          ${f('f_geo1', 'Departamento/Estado', e.divGeo1)}
+          ${f('f_geo2', 'Municipio/Provincia', e.divGeo2)}
+          <label class="f f--full"><span>Dirección</span><input class="input" id="f_dir" value="${U().esc(e.direccion || '')}"></label>
+        </div>
+
+        <h4 class="form-sec">Información laboral</h4>
+        <div class="form-grid">
+          <label class="f"><span>Departamento</span><select class="input" id="f_dep">${opt(deptos, e.departamentoId, true)}</select></label>
+          <label class="f"><span>Puesto</span><select class="input" id="f_pue">${opt(puestos, e.puestoId, true)}</select></label>
+          <label class="f"><span>Tipo</span><select class="input" id="f_tip">${opt(tipos, e.tipoColaboradorId, true)}</select></label>
+          ${f('f_ing', 'Fecha de ingreso', e.fechaIngreso, 'date', true)}
+          ${f('f_jefe', 'Jefe inmediato', e.jefeNombre)}
+          ${f('f_sup', 'Supervisor', e.supervisorNombre)}
+          ${f('f_rol', 'Rol', e.rol)}
+          ${f('f_grado', 'Grado', e.grado)}
+          ${f('f_esp', 'Especialidad', e.especialidad)}
+          ${f('f_tit', 'Título', e.titulo)}
+          ${f('f_sitio', 'Sitio', e.sitio)}
+          ${f('f_soc', 'Sociedad', e.sociedad)}
+          ${f('f_emp', 'Empresa', e.empresa)}
+          ${f('f_cc', 'Centro de costo', e.centroCosto)}
+          ${f('f_contr', 'Tipo de contrato', e.tipoContrato)}
+          ${f('f_recl', 'Reclutador', e.reclutador)}
+          ${f('f_agente', 'Agente (Issabel)', e.agente)}
+          ${f('f_ext', 'Extensión Issabel', e.extensionIssabel)}
+          <label class="f"><span>Estado actual</span><select class="input" id="f_ubic">${['EN_SITIO', 'REMOTO', 'VACACIONES', 'PERMISO', 'INCAPACIDAD', 'AUSENTE'].map((u) => `<option value="${u}" ${e.ubicacionActual === u ? 'selected' : ''}>${ubicLabel(u)}</option>`).join('')}</select></label>
+        </div>
+
+        <h4 class="form-sec">Familia</h4>
+        <div class="form-grid">
+          ${f('f_conyuge', 'Cónyuge', e.nombreConyuge)}
+          ${f('f_padre', 'Padre', e.nombrePadre)}
+          ${f('f_madre', 'Madre', e.nombreMadre)}
+          ${f('f_hijos', 'Cantidad de hijos', e.cantidadHijos)}
+        </div>
+
+        <h4 class="form-sec">Vehículos y licencias</h4>
+        <div class="form-grid">
+          ${f('f_auto', 'Automóvil', e.automovil)}
+          ${f('f_licT', 'Tipo licencia automóvil', e.licenciaAutoTipo)}
+          ${f('f_licV', 'Vence licencia automóvil', e.licenciaAutoVence, 'date')}
+          ${f('f_moto', 'Motocicleta', e.motocicleta)}
+          ${f('f_licM', 'Vence licencia motocicleta', e.licenciaMotoVence, 'date')}
+        </div>
+
+        <h4 class="form-sec">Contacto de emergencia</h4>
+        <div class="form-grid">
+          ${f('f_emgN', 'Contacto emergencia', e.emergencia && e.emergencia.nombre)}
+          ${f('f_emgP', 'Parentesco', e.emergencia && e.emergencia.parentesco)}
+          ${f('f_emgT', 'Teléfono emergencia', e.emergencia && e.emergencia.telefono)}
+          <label class="f f--full"><span>Observaciones</span><textarea class="input" id="f_obs" rows="2">${U().esc(e.observaciones || '')}</textarea></label>
+        </div>`;
       const mo = U().modal(html, {
         title: isNew ? 'Nuevo colaborador' : 'Editar colaborador', wide: true,
         buttons: [{ label: 'Cancelar', variant: 'ghost' }, {
@@ -293,11 +434,27 @@
             if (dup && dup.id !== e.id) { U().toast('Ya existe un colaborador con ese código', 'err'); return true; }
             const patch = {
               codigo, codigoJDE: g('f_jde'), nombreCompleto: nombre,
-              fechaNacimiento: g('f_nac'), genero: g('f_gen'), celular: g('f_cel'),
+              documentoId: g('f_doc'), docEmision: g('f_docE'), docVencimiento: g('f_docV'),
+              nit: g('f_nit'), seguroSocial: g('f_ss'),
+              fechaNacimiento: g('f_nac'), genero: g('f_gen'), estadoCivil: g('f_ecivil'),
+              escolaridad: g('f_esc'), carrera: g('f_carr'), postgrados: g('f_post'),
+              especializacionTecnica: g('f_esptec'), enfermedadesCronicas: g('f_enf'),
+              celular: g('f_cel'), telefonoCompania: g('f_telc'), telefonoCorporativo: g('f_telcorp'),
+              telefonoCasa: g('f_telcasa'),
               correoCorporativo: cor, correoPersonal: g('f_corp'), pais: g('f_pais'),
+              divGeo1: g('f_geo1'), divGeo2: g('f_geo2'), direccion: g('f_dir'),
               departamentoId: +g('f_dep') || null, puestoId: +g('f_pue') || null, tipoColaboradorId: +g('f_tip') || null,
               tipoColaborador: (tipos.find((t) => t.id === +g('f_tip')) || {}).nombre || e.tipoColaborador || '',
-              fechaIngreso: ingreso, jefeNombre: g('f_jefe'), ubicacionActual: g('f_ubic'),
+              fechaIngreso: ingreso, jefeNombre: g('f_jefe'), supervisorNombre: g('f_sup'),
+              rol: g('f_rol'), grado: g('f_grado'), especialidad: g('f_esp'), titulo: g('f_tit'),
+              sitio: g('f_sitio'), sociedad: g('f_soc'), empresa: g('f_emp'),
+              centroCosto: g('f_cc'), tipoContrato: g('f_contr'), reclutador: g('f_recl'),
+              agente: g('f_agente'), extensionIssabel: g('f_ext'),
+              ubicacionActual: g('f_ubic'),
+              nombreConyuge: g('f_conyuge'), nombrePadre: g('f_padre'), nombreMadre: g('f_madre'),
+              cantidadHijos: g('f_hijos'),
+              automovil: g('f_auto'), licenciaAutoTipo: g('f_licT'), licenciaAutoVence: g('f_licV'),
+              motocicleta: g('f_moto'), licenciaMotoVence: g('f_licM'),
               emergencia: { nombre: g('f_emgN'), parentesco: g('f_emgP'), telefono: g('f_emgT') },
               observaciones: g('f_obs'),
             };

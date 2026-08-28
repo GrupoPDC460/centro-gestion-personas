@@ -20,6 +20,8 @@ App.DB = (function () {
     tiposColaborador: { table: 'cgp_tipos_colaborador', pk: 'id', auto: true },
     catalogos:        { table: 'cgp_catalogos',        pk: 'id',  auto: true },
     auditoria:        { table: 'cgp_auditoria',        pk: 'id',  auto: true },
+    ausencias:        { table: 'cgp_ausencias',        pk: 'id',  auto: true },
+    organigrama:      { table: 'cgp_organigrama',      pk: 'id',  auto: true },
     config:           { table: 'cgp_config',           pk: 'key', auto: false, valueCol: 'value' },
   };
 

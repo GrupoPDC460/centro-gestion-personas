@@ -123,9 +123,64 @@ App.Repos = (function () {
     set: (key, value) => DB.put('config', { key, value }),
   };
 
+  // -------------------- Ausencias (vacaciones/permisos/incapacidades) --------------------
+  const DIAS_VACACIONES_ANUAL = 15; // ajustable en Configuración
+  const absenceRepository = {
+    all: () => DB.getAll('ausencias'),
+    byColaborador: (id) => DB.byIndex('ausencias', 'colaboradorId', id),
+    async add(a) {
+      a.createdAt = now();
+      a.dias = absenceRepository.diasHabiles(a.desde, a.hasta);
+      return DB.add('ausencias', a);
+    },
+    update: (id, patch) => DB.get('ausencias', id).then((cur) => {
+      if (!cur) throw new Error('Ausencia no encontrada');
+      const next = Object.assign({}, cur, patch);
+      next.dias = absenceRepository.diasHabiles(next.desde, next.hasta);
+      return DB.put('ausencias', next);
+    }),
+    remove: (id) => DB.del('ausencias', id),
+    // Días naturales entre dos fechas, inclusivo.
+    diasHabiles(desde, hasta) {
+      const a = new Date(desde + 'T00:00:00'), b = new Date(hasta + 'T00:00:00');
+      if (isNaN(a) || isNaN(b) || b < a) return 0;
+      return Math.round((b - a) / 86400000) + 1;
+    },
+    // Saldo de vacaciones del año en curso.
+    async saldoVacaciones(colaboradorId, year) {
+      year = year || new Date().getFullYear();
+      const list = await absenceRepository.byColaborador(colaboradorId);
+      const usados = list
+        .filter((a) => a.tipo === 'VACACIONES' && a.estado !== 'RECHAZADA' && String(a.desde).slice(0, 4) === String(year))
+        .reduce((s, a) => s + (a.dias || 0), 0);
+      const asignados = DIAS_VACACIONES_ANUAL;
+      return { asignados, usados, disponibles: Math.max(0, asignados - usados), year };
+    },
+    // Ausencia vigente hoy (para reflejar la situación actual del colaborador).
+    vigenteHoy(list, hoyISO) {
+      hoyISO = hoyISO || new Date().toISOString().slice(0, 10);
+      return list.find((a) => a.estado !== 'RECHAZADA' && a.desde <= hoyISO && a.hasta >= hoyISO) || null;
+    },
+    DIAS_VACACIONES_ANUAL,
+  };
+
+  // -------------------- Organigrama (posiciones/ajustes manuales) --------------------
+  const orgChartRepository = {
+    async load() {
+      const rows = await DB.getAll('organigrama');
+      return rows.length ? rows[0] : null;
+    },
+    async save(data) {
+      const cur = await orgChartRepository.load();
+      const rec = Object.assign({}, cur || {}, data, { updatedAt: now() });
+      return DB.put('organigrama', rec);
+    },
+  };
+
   return {
     employeeRepository, photoRepository, movementRepository,
     departmentRepository, positionRepository, typeRepository,
     catalogRepository, auditRepository, settingsRepository,
+    absenceRepository, orgChartRepository,
   };
 })();

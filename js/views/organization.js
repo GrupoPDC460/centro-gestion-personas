@@ -1,33 +1,135 @@
-/* views/organization.js — Organigrama por jefe (Nombre/Código de Líder) */
+/* views/organization.js — Organigrama: automático por jefatura + edición manual.
+ * Los ajustes manuales (reasignar jefe, ocultar, orden) se guardan en la nube y
+ * tienen prioridad sobre lo que venga del Excel. */
 App.UI.route('organizacion', async function (main) {
   const R = App.Repos, U = App.UI;
-  const emps = (await R.employeeRepository.all()).filter((e) => e.estado === 'ACTIVO');
-  // Construir jerarquía por código de jefe.
-  const porCodigo = new Map(emps.map((e) => [String(e.codigo), e]));
-  const hijos = new Map(); // codigoJefe -> [emp]
-  const raices = [];
-  emps.forEach((e) => {
-    const jefe = String(e.jefeCodigo || '');
-    if (jefe && porCodigo.has(jefe) && jefe !== String(e.codigo)) {
-      if (!hijos.has(jefe)) hijos.set(jefe, []);
-      hijos.get(jefe).push(e);
-    } else { raices.push(e); }
-  });
-
-  async function nodo(e, nivel) {
-    const kids = hijos.get(String(e.codigo)) || [];
-    const sub = kids.length ? `<div class="org__kids">${(await Promise.all(kids.map((k) => nodo(k, nivel + 1)))).join('')}</div>` : '';
-    return `<div class="org__node">
-      <div class="org__card rowlink" data-id="${e.id}">${await U.avatarHTML(e, 40)}
-        <div><b>${U.esc(e.nombreCompleto)}</b><span class="muted">${U.esc(puestoNombre(e))}</span></div>
-        ${kids.length ? `<span class="chip">${kids.length}</span>` : ''}</div>${sub}</div>`;
-  }
+  const todos = await R.employeeRepository.all();
   const puestos = await R.positionRepository.all();
-  function puestoNombre(e) { return (puestos.find((p) => p.id === e.puestoId) || {}).nombre || ''; }
+  const puestoNombre = (e) => (puestos.find((p) => p.id === e.puestoId) || {}).nombre || '';
 
-  main.innerHTML = `<div class="page-head"><h1>Organización</h1><p class="muted">Organigrama dinámico por jefatura</p></div>
-    <div class="org">${(await Promise.all(raices.map((r) => nodo(r, 0)))).join('') || '<p class="muted">Sin datos de jefatura.</p>'}</div>`;
-  main.querySelectorAll('.rowlink').forEach((n) => n.onclick = () => App.UI.navigate('empleados', { id: n.dataset.id }));
+  const cfg = (await R.orgChartRepository.load()) || {};
+  const overrides = cfg.overrides || {};   // { empId: codigoJefe | '' (raíz) }
+  const ocultos = new Set(cfg.ocultos || []);
+  let modoEdicion = false;
+
+  const emps = todos.filter((e) => e.estado === 'ACTIVO' && !ocultos.has(e.id));
+  const porCodigo = new Map(emps.map((e) => [String(e.codigo), e]));
+  const porId = new Map(todos.map((e) => [e.id, e]));
+
+  // Jefe efectivo: override manual > código de líder > supervisor por nombre.
+  function jefeDe(e) {
+    if (Object.prototype.hasOwnProperty.call(overrides, e.id)) return String(overrides[e.id] || '');
+    if (e.jefeCodigo && porCodigo.has(String(e.jefeCodigo))) return String(e.jefeCodigo);
+    const sup = String(e.supervisorNombre || '').trim().toLowerCase();
+    if (sup) {
+      const m = emps.find((x) => String(x.nombreCompleto || '').trim().toLowerCase() === sup);
+      if (m && m.id !== e.id) return String(m.codigo);
+    }
+    return '';
+  }
+
+  function construir() {
+    const hijos = new Map(); const raices = [];
+    emps.forEach((e) => {
+      const j = jefeDe(e);
+      if (j && porCodigo.has(j) && j !== String(e.codigo)) {
+        if (!hijos.has(j)) hijos.set(j, []);
+        hijos.get(j).push(e);
+      } else raices.push(e);
+    });
+    // Evitar ciclos: si un nodo es su propio ancestro, se sube a raíz.
+    const seguro = (e, vistos) => {
+      const j = jefeDe(e);
+      if (!j || !porCodigo.has(j)) return true;
+      if (vistos.has(j)) return false;
+      vistos.add(j);
+      return seguro(porCodigo.get(j), vistos);
+    };
+    emps.forEach((e) => {
+      if (!seguro(e, new Set([String(e.codigo)]))) {
+        const j = jefeDe(e);
+        const arr = hijos.get(j); if (arr) hijos.set(j, arr.filter((x) => x.id !== e.id));
+        if (!raices.includes(e)) raices.push(e);
+      }
+    });
+    const cuenta = (e) => { const k = hijos.get(String(e.codigo)) || []; return k.reduce((s, x) => s + 1 + cuenta(x), 0); };
+    raices.sort((a, b) => cuenta(b) - cuenta(a));
+    return { hijos, raices };
+  }
+
+  async function nodo(e, hijos) {
+    const kids = (hijos.get(String(e.codigo)) || []).slice().sort((a, b) => String(a.nombreCompleto).localeCompare(String(b.nombreCompleto)));
+    const sub = kids.length ? `<div class="org__kids">${(await Promise.all(kids.map((k) => nodo(k, hijos)))).join('')}</div>` : '';
+    return `<div class="org__node">
+      <div class="org__card ${modoEdicion ? 'org__card--edit' : ''}" data-id="${e.id}" ${modoEdicion ? 'draggable="true"' : ''}>
+        ${await U.avatarHTML(e, 42)}
+        <div class="org__txt"><b>${U.esc(e.nombreCompleto)}</b><span class="muted">${U.esc(puestoNombre(e) || 'Sin puesto')}</span></div>
+        ${kids.length ? `<span class="org__count" title="${kids.length} a cargo">${kids.length}</span>` : ''}
+        ${modoEdicion ? `<button class="org__x" data-raiz="${e.id}" title="Mover a nivel superior">⤴</button>` : ''}
+      </div>${sub}</div>`;
+  }
+
+  async function pintar() {
+    const { hijos, raices } = construir();
+    const cuerpo = raices.length
+      ? (await Promise.all(raices.map((r) => nodo(r, hijos)))).join('')
+      : '<div class="empty"><h3>Sin jerarquía definida</h3><p>Activa “Editar organigrama” y arrastra a cada persona sobre su jefe.</p></div>';
+    main.innerHTML = `
+      <div class="page-head">
+        <div><h1>Organización</h1><p class="muted">${modoEdicion ? 'Arrastra una tarjeta sobre otra para asignar jefe · ⤴ la sube a nivel superior' : 'Organigrama por jefatura'}</p></div>
+        <div class="row-gap">
+          <button class="btn ${modoEdicion ? 'btn--good' : 'btn--ghost'}" id="edBtn">${modoEdicion ? '✓ Listo' : '✎ Editar organigrama'}</button>
+          ${modoEdicion ? '<button class="btn btn--ghost" id="resetBtn">Restablecer</button>' : ''}
+        </div>
+      </div>
+      <div class="org">${cuerpo}</div>`;
+    wire();
+  }
+
+  function wire() {
+    main.querySelector('#edBtn').onclick = () => { modoEdicion = !modoEdicion; pintar(); };
+    const rb = main.querySelector('#resetBtn');
+    if (rb) rb.onclick = async () => {
+      if (!(await U.confirm('Se descartan los ajustes manuales y el organigrama vuelve a construirse desde los datos de jefatura. ¿Continuar?', { ok: 'Restablecer' }))) return;
+      for (const k of Object.keys(overrides)) delete overrides[k];
+      ocultos.clear();
+      await guardar(); U.toast('Organigrama restablecido', 'ok'); pintar();
+    };
+
+    main.querySelectorAll('.org__card').forEach((c) => {
+      const id = +c.dataset.id;
+      if (!modoEdicion) { c.onclick = () => App.UI.navigate('empleados', { id }); return; }
+
+      c.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', String(id)); c.classList.add('is-drag'); });
+      c.addEventListener('dragend', () => c.classList.remove('is-drag'));
+      c.addEventListener('dragover', (ev) => { ev.preventDefault(); c.classList.add('is-over'); });
+      c.addEventListener('dragleave', () => c.classList.remove('is-over'));
+      c.addEventListener('drop', async (ev) => {
+        ev.preventDefault(); c.classList.remove('is-over');
+        const arrastrado = +ev.dataTransfer.getData('text/plain');
+        if (!arrastrado || arrastrado === id) return;
+        const hijo = porId.get(arrastrado), jefe = porId.get(id);
+        if (!hijo || !jefe) return;
+        overrides[hijo.id] = String(jefe.codigo);
+        await guardar();
+        await R.employeeRepository.update(hijo.id, { jefeNombre: jefe.nombreCompleto, jefeCodigo: String(jefe.codigo) });
+        U.toast(`${hijo.nombreCompleto.split(' ')[0]} ahora reporta a ${jefe.nombreCompleto.split(' ')[0]}`, 'ok');
+        pintar();
+      });
+    });
+
+    main.querySelectorAll('[data-raiz]').forEach((b) => b.onclick = async (ev) => {
+      ev.stopPropagation();
+      const e = porId.get(+b.dataset.raiz); if (!e) return;
+      overrides[e.id] = '';
+      await guardar();
+      await R.employeeRepository.update(e.id, { jefeCodigo: '', jefeNombre: '' });
+      U.toast('Movido a nivel superior', 'ok'); pintar();
+    });
+  }
+
+  const guardar = () => R.orgChartRepository.save({ overrides, ocultos: Array.from(ocultos) });
+  await pintar();
 });
 
 /* views/emergency.js — Árbol de emergencia */
