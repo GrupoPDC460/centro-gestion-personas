@@ -28,7 +28,7 @@ window.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){},clearRect(){},
 window.HTMLCanvasElement.prototype.toDataURL=()=>'data:image/jpeg;base64,MOCK';
 const load=r=>window.eval(fs.readFileSync(path.join(ROOT,r),'utf8'));
 ['js/config.js','js/supabase.js','js/db.js','js/repositories.js','js/calc.js','js/charts.js','js/import.js','js/ui.js',
- 'js/photo-editor.js','js/absences.js',
+ 'js/photo-editor.js','js/absences.js','js/export.js',
  'js/views/dashboard.js','js/views/employees.js','js/views/movements.js','js/views/organization.js','js/views/settings.js'].forEach(load);
 const wait=ms=>new Promise(r=>setTimeout(r,ms));const A=window.App;
 (async()=>{

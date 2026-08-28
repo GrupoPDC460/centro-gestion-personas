@@ -53,6 +53,22 @@
   function wireChrome() {
     document.getElementById('menuBtn').onclick = () => document.getElementById('sidebar').classList.toggle('sidebar--open');
     document.getElementById('themeBtn').onclick = () => U.toggleTheme();
+
+    // Menú retráctil (recuerda la preferencia)
+    const app = document.querySelector('.app');
+    const cb = document.getElementById('collapseBtn');
+    const setColapso = (on) => {
+      app.classList.toggle('app--collapsed', on);
+      const ico = document.getElementById('collapseIco');
+      if (ico) ico.textContent = on ? '»' : '«';
+      if (cb) cb.title = on ? 'Expandir menú' : 'Contraer menú';
+    };
+    if (cb) cb.onclick = async () => {
+      const on = !app.classList.contains('app--collapsed');
+      setColapso(on);
+      try { await R.settingsRepository.set('menuColapsado', on); } catch (_) {}
+    };
+    R.settingsRepository.get('menuColapsado').then((v) => { if (v) setColapso(true); }).catch(() => {});
     const gs = document.getElementById('gs');
     let t; gs.oninput = () => { clearTimeout(t); t = setTimeout(() => globalSearch(gs.value), 150); };
     document.addEventListener('click', (e) => { if (!e.target.closest('.gsearch')) document.getElementById('gsResults').classList.remove('open'); });

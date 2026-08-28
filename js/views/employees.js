@@ -414,6 +414,23 @@
           ${f('f_licM', 'Vence licencia motocicleta', e.licenciaMotoVence, 'date')}
         </div>
 
+        <h4 class="form-sec">Situación / baja</h4>
+        <div class="form-grid">
+          <label class="f"><span>Estado</span>
+            <select class="input" id="f_estado">
+              <option value="ACTIVO" ${e.estado !== 'INACTIVO' ? 'selected' : ''}>Activo</option>
+              <option value="INACTIVO" ${e.estado === 'INACTIVO' ? 'selected' : ''}>Inactivo</option>
+            </select></label>
+          ${f('f_baja', 'Fecha de baja', e.fechaBaja, 'date')}
+          <label class="f"><span>Tipo de baja</span>
+            <select class="input" id="f_tbaja">
+              <option value="">—</option>
+              <option ${e.tipoBaja === 'Voluntaria' ? 'selected' : ''}>Voluntaria</option>
+              <option ${e.tipoBaja === 'Involuntaria' ? 'selected' : ''}>Involuntaria</option>
+            </select></label>
+          ${f('f_mbaja', 'Motivo de baja', e.motivoBaja)}
+        </div>
+
         <h4 class="form-sec">Contacto de emergencia</h4>
         <div class="form-grid">
           ${f('f_emgN', 'Contacto emergencia', e.emergencia && e.emergencia.nombre)}
@@ -458,6 +475,20 @@
               emergencia: { nombre: g('f_emgN'), parentesco: g('f_emgP'), telefono: g('f_emgT') },
               observaciones: g('f_obs'),
             };
+            // Estado y datos de baja (editables desde aquí)
+            const nuevoEstado = g('f_estado') || 'ACTIVO';
+            const fBaja = g('f_baja');
+            if (nuevoEstado === 'INACTIVO') {
+              if (fBaja && ingreso && fBaja < ingreso) { U().toast('La fecha de baja no puede ser anterior al ingreso', 'warn'); return true; }
+              patch.estado = 'INACTIVO';
+              patch.fechaBaja = fBaja;
+              patch.tipoBaja = g('f_tbaja');
+              patch.motivoBaja = g('f_mbaja');
+              if (patch.motivoBaja) await R().catalogRepository.ensure('motivoBaja', patch.motivoBaja);
+            } else {
+              patch.estado = 'ACTIVO';
+              patch.fechaBaja = ''; patch.tipoBaja = ''; patch.motivoBaja = '';
+            }
             if (isNew) {
               patch.estado = 'ACTIVO';
               const id = await R().employeeRepository.create(patch);
@@ -468,6 +499,18 @@
               // Auditoría de cambios de dep/puesto + movimientos
               if (e.departamentoId !== patch.departamentoId) { await R().movementRepository.add({ colaboradorId: e.id, tipo: 'CAMBIO_DEPARTAMENTO', departamentoId: patch.departamentoId, observaciones: 'Cambio de departamento' }); await R().auditRepository.add('CAMBIO_DEPARTAMENTO', e.id, 'departamento', e.departamentoId, patch.departamentoId); }
               if (e.puestoId !== patch.puestoId) { await R().movementRepository.add({ colaboradorId: e.id, tipo: 'CAMBIO_PUESTO', puestoId: patch.puestoId, observaciones: 'Cambio de puesto' }); await R().auditRepository.add('CAMBIO_PUESTO', e.id, 'puesto', e.puestoId, patch.puestoId); }
+              // Cambio de estado desde la edición: dejar constancia en el historial
+              if (e.estado !== patch.estado) {
+                const tipoMov = patch.estado === 'INACTIVO' ? 'BAJA' : 'REINGRESO';
+                await R().movementRepository.add({ colaboradorId: e.id, tipo: tipoMov, fecha: patch.estado === 'INACTIVO' ? (patch.fechaBaja || null) : null, observaciones: patch.motivoBaja || 'Actualizado desde la ficha' });
+                await R().auditRepository.add(tipoMov, e.id, 'estado', e.estado, patch.estado);
+              } else if (patch.estado === 'INACTIVO' && e.fechaBaja !== patch.fechaBaja) {
+                // Solo se corrigió la fecha de baja
+                await R().auditRepository.add('CORRECCION_BAJA', e.id, 'fechaBaja', e.fechaBaja || '', patch.fechaBaja || '');
+                const movs = await R().movementRepository.byColaborador(e.id);
+                const mb = movs.filter((m) => m.tipo === 'BAJA').pop();
+                if (mb) await App.DB.put('movimientos', Object.assign({}, mb, { fecha: patch.fechaBaja }));
+              }
               await R().employeeRepository.update(e.id, patch);
               U().toast('Colaborador actualizado');
             }

@@ -33,7 +33,7 @@ App.UI.route('organizacion', async function (main) {
   else {
     // Incorporar colaboradores activos que aún no tienen caja (altas posteriores).
     const yaEnDiagrama = new Set(nodos.filter((n) => n.empId).map((n) => n.empId));
-    const faltantes = emps.filter((e) => e.estado === 'ACTIVO' && !yaEnDiagrama.has(e.id));
+    const faltantes = emps.filter((e) => !yaEnDiagrama.has(e.id));
     if (faltantes.length) {
       let fy = Math.max(0, ...nodos.map((n) => n.y)) + 130;
       faltantes.forEach((e, i) => {
@@ -44,7 +44,7 @@ App.UI.route('organizacion', async function (main) {
   }
 
   function autoGenerar() {
-    const activos = emps.filter((e) => e.estado === 'ACTIVO');
+    const activos = emps.slice(); // incluye inactivos: la estructura los contempla
     const porCodigo = new Map(activos.map((e) => [String(e.codigo), e]));
     const jefeDe = (e) => {
       if (e.jefeCodigo && porCodigo.has(String(e.jefeCodigo)) && String(e.jefeCodigo) !== String(e.codigo)) return String(e.jefeCodigo);
@@ -61,20 +61,38 @@ App.UI.route('organizacion', async function (main) {
     return autoLayout(out);
   }
 
-  // Acomodo en árbol: reparte por niveles y centra a los padres sobre sus hijos.
+  // Acomodo en árbol sin cruces: cada rama reserva su propio ancho.
   function autoLayout(list) {
     const hijos = new Map(); const raices = [];
     list.forEach((n) => { if (n.padre && list.some((x) => x.id === n.padre)) { if (!hijos.has(n.padre)) hijos.set(n.padre, []); hijos.get(n.padre).push(n); } else raices.push(n); });
-    const GX = 40, GY = 130; let cursor = 0;
-    const ubicar = (n, depth) => {
-      const kids = hijos.get(n.id) || [];
-      n.y = depth * GY;
-      if (!kids.length) { n.x = cursor; cursor += W + GX; return n.x; }
-      const xs = kids.map((k) => ubicar(k, depth + 1));
-      n.x = Math.round((xs[0] + xs[xs.length - 1]) / 2);
-      return n.x;
+    // Orden estable por título para que no bailen entre recargas
+    hijos.forEach((arr) => arr.sort((a, b) => String(a.titulo).localeCompare(String(b.titulo))));
+    raices.sort((a, b) => String(a.titulo).localeCompare(String(b.titulo)));
+
+    const GX = 34, GY = 132;
+    // Ancho que ocupa cada subárbol (en píxeles)
+    const anchoCache = new Map();
+    const ancho = (n, g = 0) => {
+      if (anchoCache.has(n.id)) return anchoCache.get(n.id);
+      const kids = g > 30 ? [] : (hijos.get(n.id) || []);
+      const w = !kids.length ? W : kids.reduce((s, k, i) => s + ancho(k, g + 1) + (i ? GX : 0), 0);
+      const r = Math.max(W, w);
+      anchoCache.set(n.id, r);
+      return r;
     };
-    raices.forEach((r) => { ubicar(r, 0); cursor += GX * 2; });
+    // Colocar centrando al padre sobre el bloque de sus hijos
+    const ubicar = (n, izq, depth) => {
+      const kids = hijos.get(n.id) || [];
+      const w = ancho(n);
+      n.y = depth * GY;
+      if (!kids.length) { n.x = Math.round(izq + (w - W) / 2); return; }
+      let cursor = izq;
+      kids.forEach((k) => { const kw = ancho(k); ubicar(k, cursor, depth + 1); cursor += kw + GX; });
+      const first = kids[0], last = kids[kids.length - 1];
+      n.x = Math.round((first.x + last.x) / 2);
+    };
+    let x0 = 0;
+    raices.forEach((r) => { ubicar(r, x0, 0); x0 += ancho(r) + GX * 3; });
     return list;
   }
 
@@ -135,14 +153,24 @@ App.UI.route('organizacion', async function (main) {
     }));
     nodes.innerHTML = html.join('');
 
-    // Conectores curvos
+    // Conectores: el estilo lo decide el usuario (ortogonal, curva o recta).
     const pos = new Map(nodos.map((n) => [n.id, n]));
+    const estilo = view.linea || 'ortogonal';
     let paths = '';
     nodos.forEach((n) => {
       const p = n.padre && pos.get(n.padre); if (!p) return;
       const x1 = p.x + W / 2, y1 = p.y + H, x2 = n.x + W / 2, y2 = n.y;
-      const my = (y1 + y2) / 2;
-      paths += `<path d="M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}" class="orglink"/>`;
+      const my = y1 + Math.max(22, (y2 - y1) / 2);
+      let d;
+      if (estilo === 'recta') d = `M${x1},${y1} L${x2},${y2}`;
+      else if (estilo === 'curva') d = `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
+      else { // ortogonal con esquinas redondeadas (estilo Visio)
+        const r = 12, dir = x2 > x1 ? 1 : -1, dx = Math.abs(x2 - x1);
+        d = dx < 2
+          ? `M${x1},${y1} L${x2},${y2}`
+          : `M${x1},${y1} L${x1},${my - r} Q${x1},${my} ${x1 + r * dir},${my} L${x2 - r * dir},${my} Q${x2},${my} ${x2},${my + r} L${x2},${y2}`;
+      }
+      paths += `<path d="${d}" class="orglink"/>`;
     });
     links.innerHTML = paths;
     const maxX = Math.max(600, ...nodos.map((n) => n.x + W + 100));
@@ -228,12 +256,20 @@ App.UI.route('organizacion', async function (main) {
         <h3 class="orgpanel__t">Organigrama</h3>
         <p class="muted">Selecciona una caja para editarla, o crea una nueva.</p>
         <button class="btn btn--primary" id="pNueva" style="width:100%;justify-content:center;margin-top:12px">+ Nueva caja</button>
+        <label class="f" style="margin-top:14px"><span>Líneas de mando</span>
+          <select class="input" id="pLinea">
+            <option value="ortogonal" ${(view.linea || 'ortogonal') === 'ortogonal' ? 'selected' : ''}>En escuadra (Visio)</option>
+            <option value="curva" ${view.linea === 'curva' ? 'selected' : ''}>Curvas</option>
+            <option value="recta" ${view.linea === 'recta' ? 'selected' : ''}>Rectas</option>
+          </select></label>
         <div class="orgpanel__stats">
           <div><b>${nodos.length}</b><span class="muted">Cajas</span></div>
           <div><b>${nodos.filter((x) => !x.padre).length}</b><span class="muted">Nivel superior</span></div>
         </div>
         <p class="muted" style="margin-top:14px">Arrastra el fondo para desplazarte · doble clic en una caja abre la ficha.</p>`;
       const b = body.querySelector('#pNueva'); if (b) b.onclick = () => nuevaCaja();
+      const sl = body.querySelector('#pLinea');
+      if (sl) sl.onchange = (ev) => { view.linea = ev.target.value; guardar(); pintar(); };
       return;
     }
 

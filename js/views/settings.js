@@ -49,6 +49,12 @@ App.UI.route('configuracion', async function (main) {
       <div class="row-gap" style="margin-top:10px"><button class="btn btn--ghost" id="chgPass">Cambiar contraseña</button></div>
     </div>
 
+    <div class="card" style="margin-top:16px">
+      <h3 class="card__title">Exportar información</h3>
+      <p class="muted">Elige exactamente qué campos descargar (por ejemplo, solo nombre y extensión de Issabel, o nombre y líder).</p>
+      <div class="row-gap" style="margin-top:10px"><button class="btn btn--primary" id="expBtn">Exportar colaboradores…</button></div>
+    </div>
+
     <div class="card card--danger" style="margin-top:16px">
       <h3 class="card__title">Zona de peligro</h3>
       <p class="muted">Esto borra todos los colaboradores, movimientos, fotos y catálogos <b>de la base en la nube</b> (afecta a todos los usuarios). Úsalo con cuidado.</p>
@@ -114,6 +120,7 @@ App.UI.route('configuracion', async function (main) {
 
   // Backup / restore / wipe
   document.getElementById('bkBtn').onclick = () => U.backup();
+  document.getElementById('expBtn').onclick = () => App.Exporter.abrir();
   document.getElementById('rsBtn').onclick = () => document.getElementById('rsFile').click();
   document.getElementById('rsFile').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
