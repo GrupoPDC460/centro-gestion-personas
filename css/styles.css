@@ -50,6 +50,10 @@ a { color: inherit; }
   border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; z-index: 40;
 }
 .brand { display: flex; align-items: center; gap: 12px; padding: 6px 10px 18px; }
+/* Tamaño del logo definido junto al layout: evita que se desborde si algún
+   estilo de componentes no llega a cargar. */
+.brand__logo { width: 44px; max-width: 44px; height: auto; flex: 0 0 auto; }
+.login-logo { width: 120px; max-width: 60%; height: auto; }
 .brand__txt { display: flex; flex-direction: column; line-height: 1.1; }
 .brand__txt b { font-family: var(--font-display); font-weight: 900; font-size: 1.02rem; }
 .brand__txt span { font-size: .72rem; color: var(--muted); }
