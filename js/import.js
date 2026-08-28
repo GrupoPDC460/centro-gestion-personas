@@ -93,6 +93,9 @@ App.Import = (function () {
     'segundo apellido contacto de emergencia': 'emgA2',
     'telefono de emergencia': 'emgTel',
     'parentesco contacto de emergencia': 'emgParentesco',
+    'corporativo': 'telefonoCorporativo',
+    'agente': 'agenteRaw',
+    'supervisor': 'supervisorNombre',
     'foto de colaborador': 'fotoRef',
   };
 
@@ -187,6 +190,12 @@ App.Import = (function () {
     const areaTrail = [rec.area1, rec.area2, rec.area3, rec.area4, rec.areaFinal]
       .map(clean).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
+    // "Agente 1 - 1101" -> agente "Agente 1" + extensión Issabel "1101"
+    const agenteRaw = clean(rec.agenteRaw);
+    const mAg = agenteRaw.match(/^(.*?)\s*-\s*(\d+)\s*$/);
+    const agente = mAg ? mAg[1].trim() : agenteRaw;
+    const extensionIssabel = mAg ? mAg[2] : '';
+
     return {
       codigo: clean(rec.codigo),
       codigoJDE: clean(rec.codigoJDE),
@@ -198,7 +207,9 @@ App.Import = (function () {
       genero: clean(rec.genero),
       celular: clean(rec.celular),
       telefonoCompania: clean(rec.telefonoCompania),
+      telefonoCorporativo: clean(rec.telefonoCorporativo),
       telefonoCasa: clean(rec.telefonoCasa),
+      agente, extensionIssabel, supervisorNombre: clean(rec.supervisorNombre),
       correoPersonal: clean(rec.correoPersonal),
       correoCorporativo: clean(rec.correoCorporativo),
       pais: clean(rec.pais),

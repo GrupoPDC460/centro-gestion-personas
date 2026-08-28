@@ -171,7 +171,8 @@
               ${line('Código', e.codigo)}${line('Código JDE', e.codigoJDE)}
               ${line('Nacimiento', U().fechaCorta(e.fechaNacimiento) + (edad != null ? ` (${edad} años)` : ''))}
               ${line('Género', e.genero)}${line('Estado civil', e.estadoCivil)}
-              ${line('Celular', e.celular)}${line('Tel. compañía', e.telefonoCompania)}${line('Tel. casa', e.telefonoCasa)}
+              ${line('Celular', e.celular)}${line('Tel. compañía', e.telefonoCompania)}${line('Tel. corporativo', e.telefonoCorporativo)}${line('Tel. casa', e.telefonoCasa)}
+              ${line('Agente (Issabel)', e.agente)}${line('Extensión Issabel', e.extensionIssabel)}${line('Supervisor', e.supervisorNombre)}
               ${line('Correo personal', e.correoPersonal)}${line('Correo corporativo', e.correoCorporativo)}
               ${line('País', e.pais)}${line('Depto./Estado', e.divGeo1)}${line('Municipio', e.divGeo2)}
               ${line('Dirección', e.direccion)}${line('Escolaridad', e.escolaridad)}

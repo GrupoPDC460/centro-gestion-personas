@@ -16,8 +16,9 @@
       d = isNaN(t) ? null : t;
     }
     if (!d) return null;
-    // Centinela de Excel para "vacío / no aplica" (1899-12-30/31, 1900-01-01): descartar.
-    if (d.getFullYear() < 1950) return null;
+    // Centinela de Excel para "vacío / no aplica" (1899-12-30/31, 1900-01-01) o dato corrupto.
+    const yr = d.getFullYear();
+    if (yr < 1950 || yr > 2100) return null;
     return d;
   }
 
@@ -128,7 +129,7 @@
       let next = new Date(y, fn.getMonth(), fn.getDate());
       if (next < startOfDay) next = new Date(y + 1, fn.getMonth(), fn.getDate());
       const diffDays = Math.round((next - startOfDay) / 86400000);
-      const item = { colaborador: c, fecha: next, dia: fn.getDate(), mes: fn.getMonth(), edad: edad(fn, next), diffDays };
+      const item = { colaborador: c, fecha: next, dia: fn.getDate(), mes: fn.getMonth(), edad: y - fn.getFullYear(), diffDays };
       if (diffDays === 0) out.hoy.push(item);
       if (diffDays >= 0 && diffDays <= 7) out.semana.push(item);
       if (fn.getMonth() === ref.getMonth()) out.mes.push(item);
