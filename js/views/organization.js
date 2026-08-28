@@ -15,7 +15,23 @@ App.UI.route('organizacion', async function (main) {
   // Preferencias de la vista (se recuerdan en la nube)
   const cfg = (await R.orgChartRepository.load()) || {};
   let verInactivos = cfg.verInactivos !== false;
-  const guardarPref = () => R.orgChartRepository.save(Object.assign({}, cfg, { verInactivos })).catch(() => {});
+  let modoAjuste = false;
+  // Orden manual: { [codigoJefe|'__raiz']: [codigo, codigo, ...] }
+  const orden = cfg.orden && typeof cfg.orden === 'object' ? cfg.orden : {};
+  const guardarPref = () => R.orgChartRepository.save(Object.assign({}, cfg, { verInactivos, orden })).catch(() => {});
+
+  // Aplica el orden manual guardado; los no listados van al final, alfabéticos.
+  function aplicarOrden(clave, arr, comparadorBase) {
+    const pref = orden[clave];
+    if (!pref || !pref.length) return arr.sort(comparadorBase);
+    const pos = new Map(pref.map((c, i) => [String(c), i]));
+    return arr.sort((a, b) => {
+      const ia = pos.has(String(a.codigo)) ? pos.get(String(a.codigo)) : Infinity;
+      const ib = pos.has(String(b.codigo)) ? pos.get(String(b.codigo)) : Infinity;
+      if (ia !== ib) return ia - ib;
+      return comparadorBase(a, b);
+    });
+  }
 
   // Puesto abreviado: quita el "de Cobros Venta Directa…" que se repite en todos.
   function puestoCorto(e) {
@@ -35,13 +51,16 @@ App.UI.route('organizacion', async function (main) {
         hijos.get(j).push(e);
       } else raices.push(e);
     });
-    hijos.forEach((arr) => arr.sort((a, b) => {
-      // Primero quienes tienen gente a cargo, luego alfabético
-      const ca = (hijos.get(String(a.codigo)) || []).length, cb = (hijos.get(String(b.codigo)) || []).length;
-      if (!!ca !== !!cb) return cb - ca;
-      return String(a.nombreCompleto).localeCompare(String(b.nombreCompleto));
-    }));
-    raices.sort((a, b) => (hijos.get(String(b.codigo)) || []).length - (hijos.get(String(a.codigo)) || []).length);
+    const alfabetico = (a, b) => String(a.nombreCompleto).localeCompare(String(b.nombreCompleto));
+    hijos.forEach((arr, clave) => {
+      aplicarOrden(clave, arr, (a, b) => {
+        // Por defecto: primero quienes tienen gente a cargo, luego alfabético
+        const ca = (hijos.get(String(a.codigo)) || []).length, cb = (hijos.get(String(b.codigo)) || []).length;
+        if (!!ca !== !!cb) return cb - ca;
+        return alfabetico(a, b);
+      });
+    });
+    aplicarOrden('__raiz', raices, (a, b) => (hijos.get(String(b.codigo)) || []).length - (hijos.get(String(a.codigo)) || []).length);
     return { hijos, raices, lista };
   }
 
@@ -59,29 +78,37 @@ App.UI.route('organizacion', async function (main) {
   }
 
   // Fila compacta de un integrante del equipo (columna vertical)
-  async function filaEquipo(e) {
+  async function filaEquipo(e, jefeCod, idx, total) {
     const inactivo = e.estado !== 'ACTIVO';
-    return `<div class="ogx__row ${inactivo ? 'is-off' : ''}" data-id="${e.id}">
+    return `<div class="ogx__row ${inactivo ? 'is-off' : ''} ${modoAjuste ? 'is-adj' : ''}" data-id="${e.id}">
       ${await U.avatarHTML(e, 30)}
       <div class="ogx__rowtxt">
         <b>${U.esc(e.nombreCompleto)}</b>
         <span class="muted">${U.esc(puestoCorto(e))}</span>
       </div>
       ${inactivo ? '<span class="ogx__off">Inactivo</span>' : ''}
-      <button class="ogx__move" data-move="${e.id}" title="Cambiar de líder">⇄</button>
+      ${modoAjuste ? `<span class="ogx__ord">
+          <button class="ogx__arrow" data-up="${e.codigo}" data-j="${jefeCod}" ${idx === 0 ? 'disabled' : ''} title="Subir">▲</button>
+          <button class="ogx__arrow" data-down="${e.codigo}" data-j="${jefeCod}" ${idx === total - 1 ? 'disabled' : ''} title="Bajar">▼</button>
+        </span>` : `<button class="ogx__move" data-move="${e.id}" title="Cambiar de líder">⇄</button>`}
     </div>`;
   }
 
   // Columna: un líder con su equipo debajo
-  async function columna(lider, hijos) {
+  async function columna(lider, hijos, jefeCod, idx, total) {
     const equipo = hijos.get(String(lider.codigo)) || [];
     const conMando = equipo.filter((x) => (hijos.get(String(x.codigo)) || []).length);
     const gestores = equipo.filter((x) => !(hijos.get(String(x.codigo)) || []).length);
-    const sub = (await Promise.all(conMando.map((x) => columna(x, hijos)))).join('');
+    const sub = (await Promise.all(conMando.map((x, i) => columna(x, hijos, String(lider.codigo), i, conMando.length)))).join('');
+    const flechas = modoAjuste ? `<div class="ogx__colord">
+        <button class="ogx__arrow" data-left="${lider.codigo}" data-j="${jefeCod}" ${idx === 0 ? 'disabled' : ''} title="Mover a la izquierda">◀</button>
+        <button class="ogx__arrow" data-right="${lider.codigo}" data-j="${jefeCod}" ${idx === total - 1 ? 'disabled' : ''} title="Mover a la derecha">▶</button>
+      </div>` : '';
     return `<div class="ogx__branch">
+      ${flechas}
       ${await tarjetaLider(lider, equipo.length, 1)}
       ${equipo.length ? '<span class="ogx__stem"></span>' : ''}
-      ${gestores.length ? `<div class="ogx__team">${(await Promise.all(gestores.map(filaEquipo))).join('')}</div>` : ''}
+      ${gestores.length ? `<div class="ogx__team">${(await Promise.all(gestores.map((g, i) => filaEquipo(g, String(lider.codigo), i, gestores.length)))).join('')}</div>` : ''}
       ${sub ? `<div class="ogx__subs">${sub}</div>` : ''}
     </div>`;
   }
@@ -98,20 +125,22 @@ App.UI.route('organizacion', async function (main) {
       cuerpo += `<div class="ogx__tree">
         <div class="ogx__top">${await tarjetaLider(raiz, directos.length, 0)}</div>
         ${directos.length ? '<span class="ogx__stem ogx__stem--top"></span>' : ''}
-        ${sueltos.length ? `<div class="ogx__direct">${(await Promise.all(sueltos.map(filaEquipo))).join('')}</div>` : ''}
-        ${lideres.length ? `<div class="ogx__cols">${(await Promise.all(lideres.map((l) => columna(l, hijos)))).join('')}</div>` : ''}
+        ${sueltos.length ? `<div class="ogx__direct">${(await Promise.all(sueltos.map((s, i) => filaEquipo(s, String(raiz.codigo), i, sueltos.length)))).join('')}</div>` : ''}
+        ${lideres.length ? `<div class="ogx__cols">${(await Promise.all(lideres.map((l, i) => columna(l, hijos, String(raiz.codigo), i, lideres.length)))).join('')}</div>` : ''}
       </div>`;
     }
 
     main.innerHTML = `
       <div class="page-head">
-        <div><h1>Organización</h1><p class="muted">${activos} activos · se acomoda automáticamente</p></div>
+        <div><h1>Organización</h1><p class="muted">${modoAjuste ? 'Modo ajuste: usa las flechas para reordenar' : activos + ' activos · se acomoda automáticamente'}</p></div>
         <div class="row-gap">
           <label class="switch"><input type="checkbox" id="verInact" ${verInactivos ? 'checked' : ''}><span>Mostrar inactivos</span></label>
+          <button class="btn ${modoAjuste ? 'btn--good' : 'btn--ghost'} btn--sm" id="adjBtn">${modoAjuste ? '✓ Listo' : '⇅ Ajustar orden'}</button>
+          ${modoAjuste && Object.keys(orden).length ? '<button class="btn btn--ghost btn--sm" id="resetOrd">Restablecer</button>' : ''}
           <button class="btn btn--ghost btn--sm" id="expOrg">⤓ Exportar</button>
         </div>
       </div>
-      <div class="ogx">${cuerpo || '<div class="empty"><h3>Sin estructura definida</h3><p>Asigna el líder de cada colaborador desde su ficha.</p></div>'}</div>`;
+      <div class="ogx ${modoAjuste ? 'ogx--adj' : ''}">${cuerpo || '<div class="empty"><h3>Sin estructura definida</h3><p>Asigna el líder de cada colaborador desde su ficha.</p></div>'}</div>`;
 
     wire(hijos, lista);
   }
@@ -119,19 +148,58 @@ App.UI.route('organizacion', async function (main) {
   function wire(hijos, lista) {
     main.querySelector('#verInact').onchange = (ev) => { verInactivos = ev.target.checked; guardarPref(); pintar(); };
     main.querySelector('#expOrg').onclick = () => exportar(hijos, lista);
+    main.querySelector('#adjBtn').onclick = () => { modoAjuste = !modoAjuste; pintar(); };
+    const rst = main.querySelector('#resetOrd');
+    if (rst) rst.onclick = async () => {
+      if (!(await U.confirm('Se descarta tu orden manual y vuelve al acomodo automático. ¿Continuar?', { ok: 'Restablecer' }))) return;
+      Object.keys(orden).forEach((k) => delete orden[k]);
+      guardarPref(); U.toast('Orden restablecido', 'ok'); pintar();
+    };
 
-    // Abrir ficha al hacer clic
+    // Personas dentro de una columna: ▲ ▼ (se mueven respecto a sus pares)
+    main.querySelectorAll('[data-up]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); moverEntrePares(b.dataset.j, b.dataset.up, -1); });
+    main.querySelectorAll('[data-down]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); moverEntrePares(b.dataset.j, b.dataset.down, 1); });
+    // Columnas de líderes: ◀ ▶
+    main.querySelectorAll('[data-left]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); moverEntrePares(b.dataset.j, b.dataset.left, -1); });
+    main.querySelectorAll('[data-right]').forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); moverEntrePares(b.dataset.j, b.dataset.right, 1); });
+
+    // Abrir ficha (solo fuera del modo ajuste, para no estorbar)
     main.querySelectorAll('[data-id]').forEach((el) => el.onclick = (ev) => {
-      if (ev.target.closest('[data-move]')) return;
+      if (ev.target.closest('button')) return;
       App.UI.navigate('empleados', { id: +el.dataset.id });
     });
 
-    // Cambiar de líder sin arrastrar: se elige de una lista
     main.querySelectorAll('[data-move]').forEach((b) => b.onclick = async (ev) => {
       ev.stopPropagation();
       const e = lista.find((x) => x.id === +b.dataset.move); if (!e) return;
       await cambiarLider(e, lista);
     });
+  }
+
+  // Mueve un elemento dentro de su grupo. Solo se intercambia con vecinos del
+  // mismo tipo (líder con líder, gestor con gestor), que es como se muestran.
+  function moverEntrePares(clave, codigo, delta) {
+    const { hijos, raices } = construir();
+    const grupo = clave === '__raiz' ? raices : (hijos.get(String(clave)) || []);
+    if (!grupo.length) return;
+    const tieneMando = (x) => (hijos.get(String(x.codigo)) || []).length > 0;
+    const yo = grupo.find((x) => String(x.codigo) === String(codigo));
+    if (!yo) return;
+
+    // Posiciones (dentro del grupo) de los elementos del mismo tipo
+    const idxPares = [];
+    grupo.forEach((x, i) => { if (tieneMando(x) === tieneMando(yo)) idxPares.push(i); });
+    const p = idxPares.indexOf(grupo.indexOf(yo));
+    const q = p + delta;
+    if (p < 0 || q < 0 || q >= idxPares.length) return;
+
+    // Intercambiar en el arreglo del grupo y guardar el orden resultante
+    const copia = grupo.slice();
+    const a = idxPares[p], b = idxPares[q];
+    const tmp = copia[a]; copia[a] = copia[b]; copia[b] = tmp;
+    orden[clave] = copia.map((x) => String(x.codigo));
+    guardarPref();
+    pintar();
   }
 
   async function cambiarLider(e, lista) {

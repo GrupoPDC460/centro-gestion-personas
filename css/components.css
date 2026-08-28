@@ -439,3 +439,14 @@ textarea.input { resize: vertical; }
   .ogx__team, .ogx__direct { min-width: 260px; }
   .ogx__move { opacity: 1; }
 }
+
+/* ---------- Modo ajuste del organigrama ---------- */
+.ogx--adj .ogx__row { border-color: var(--border); background: var(--surface); }
+.ogx--adj .ogx__card { border-style: dashed; }
+.ogx__ord { display: inline-flex; flex-direction: column; gap: 1px; }
+.ogx__colord { display: flex; gap: 6px; margin-bottom: 7px; }
+.ogx__arrow { border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  border-radius: 7px; cursor: pointer; font-size: .6rem; line-height: 1; padding: 3px 6px; }
+.ogx__colord .ogx__arrow { padding: 5px 12px; font-size: .7rem; }
+.ogx__arrow:hover:not(:disabled) { background: var(--orange); color: #fff; border-color: var(--orange); }
+.ogx__arrow:disabled { opacity: .3; cursor: default; }
