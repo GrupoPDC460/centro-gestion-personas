@@ -239,144 +239,6 @@ textarea.input { resize: vertical; }
   letter-spacing: .06em; color: var(--muted); margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
 .form-sec:first-child { margin-top: 0; }
 
-/* ---------- Organigrama ---------- */
-.org__card { display: inline-flex; align-items: center; gap: 11px; padding: 11px 15px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 14px; cursor: pointer; transition: transform .12s, box-shadow .12s, border-color .12s; position: relative; }
-.org__card:hover { transform: translateY(-1px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--celeste) 50%, var(--border)); }
-.org__txt { display: flex; flex-direction: column; line-height: 1.3; }
-.org__txt b { font-size: .9rem; }
-.org__txt .muted { font-size: .76rem; }
-.org__count { background: color-mix(in srgb, var(--orange) 18%, transparent); color: var(--orange);
-  font-size: .72rem; font-weight: 900; padding: 3px 9px; border-radius: 999px; margin-left: 4px; }
-.org__card--edit { cursor: grab; border-style: dashed; }
-.org__card--edit:active { cursor: grabbing; }
-.org__card.is-drag { opacity: .45; }
-.org__card.is-over { border-color: var(--orange); box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 25%, transparent); }
-.org__x { border: 0; background: var(--surface-2); color: var(--muted); border-radius: 8px; width: 26px; height: 26px; cursor: pointer; margin-left: 2px; }
-.org__x:hover { background: var(--orange); color: #fff; }
-.org__kids { margin-left: 26px; padding-left: 20px; border-left: 2px solid var(--border); margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
-
-/* ============================================================================
- * Organigrama tipo lienzo + panel "liquid glass"
- * ==========================================================================*/
-.glass {
-  background: color-mix(in srgb, var(--surface) 62%, transparent);
-  backdrop-filter: blur(26px) saturate(180%);
-  -webkit-backdrop-filter: blur(26px) saturate(180%);
-  border: 1px solid color-mix(in srgb, #fff 16%, var(--border));
-  box-shadow: 0 10px 40px rgba(0,0,0,.28), inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
-}
-.orgwrap { position: relative; display: grid; grid-template-columns: 1fr 320px; gap: 0;
-  height: calc(100vh - 150px); min-height: 480px; border-radius: var(--radius); overflow: hidden;
-  border: 1px solid var(--border); background: var(--surface); transition: grid-template-columns .32s cubic-bezier(.4,0,.2,1); }
-.orgwrap--collapsed { grid-template-columns: 1fr 0px; }
-
-/* Lienzo */
-.orgcanvas { position: relative; overflow: hidden; cursor: grab;
-  background-color: var(--bg-grad2);
-  background-image: radial-gradient(color-mix(in srgb, var(--muted) 26%, transparent) 1px, transparent 1px);
-  background-size: 22px 22px; }
-.orgcanvas.is-pan { cursor: grabbing; }
-.orgstage { position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform .12s ease-out; }
-.orglines { position: absolute; top: 0; left: 0; pointer-events: none; }
-
-/* Cajas */
-.onode { position: absolute; width: 190px; min-height: 92px; border-radius: 16px; overflow: hidden;
-  background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.16);
-  display: flex; flex-direction: column; align-items: center; padding: 0 10px 12px; cursor: grab;
-  transition: box-shadow .15s, border-color .15s, transform .08s; }
-.onode:hover { box-shadow: 0 12px 30px rgba(0,0,0,.24); }
-.onode.is-drag { cursor: grabbing; opacity: .9; box-shadow: 0 18px 44px rgba(0,0,0,.34); }
-.onode.is-sel { border-color: var(--nc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc) 32%, transparent), 0 12px 30px rgba(0,0,0,.24); }
-.onode.is-target { outline: 2px dashed var(--orange); outline-offset: 3px; }
-.onode__bar { height: 26px; width: calc(100% + 20px); margin: 0 -10px; background: var(--nc); }
-.onode__av { margin-top: -22px; border-radius: 50%; padding: 3px; background: var(--surface); }
-.onode__body { text-align: center; margin-top: 7px; line-height: 1.3; width: 100%; }
-.onode__body b { display: block; font-size: .84rem; font-weight: 800; color: var(--nc);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.onode__body span { display: block; font-size: .74rem; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.onode__link { position: absolute; top: 4px; right: 5px; border: 0; background: rgba(255,255,255,.25);
-  color: #fff; width: 20px; height: 20px; border-radius: 6px; cursor: pointer; font-size: .68rem; opacity: 0; transition: opacity .15s; }
-.onode:hover .onode__link { opacity: 1; }
-
-/* Controles flotantes */
-.orgtools { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 4px; padding: 5px; border-radius: 14px; }
-.orgtool { border: 0; background: transparent; color: var(--text); width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-size: .95rem; font-weight: 700; }
-.orgtool:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
-.orgtoggle { position: absolute; top: 14px; right: 14px; z-index: 5; width: 30px; height: 44px;
-  border-radius: 12px; cursor: pointer; color: var(--text); font-size: 1rem; font-weight: 800; }
-
-/* Panel lateral */
-.orgpanel { display: flex; flex-direction: column; border-left: 1px solid var(--border); border-radius: 0;
-  overflow: hidden; transition: opacity .25s; }
-.orgwrap--collapsed .orgpanel { opacity: 0; pointer-events: none; }
-.orgpanel__head { display: flex; align-items: center; gap: 11px; padding: 16px; border-bottom: 1px solid var(--border); }
-.orgpanel__logo { width: 40px; height: auto; }
-.orgpanel__head b { display: block; font-family: var(--font-display); font-weight: 900; font-size: .95rem; }
-.orgpanel__head .muted { font-size: .74rem; }
-.orgpanel__scroll { padding: 16px; overflow-y: auto; flex: 1; }
-.orglist { display: flex; flex-direction: column; gap: 5px; max-height: 250px; overflow-y: auto; }
-.orgitem { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px;
-  background: var(--surface-2); cursor: grab; font-size: .82rem; }
-.orgitem:hover { background: color-mix(in srgb, var(--celeste) 16%, var(--surface-2)); }
-.orgitem b { display: block; font-size: .8rem; font-weight: 700; }
-.orgitem .muted { font-size: .7rem; }
-.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
-.sw { width: 26px; height: 26px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
-.sw.is-on { border-color: var(--text); transform: scale(1.08); }
-
-/* Marca */
-.brand__logo { width: 42px; height: auto; flex: 0 0 auto; }
-.login-logo { width: 54px; height: auto; }
-
-@media (max-width: 900px) {
-  .orgwrap { grid-template-columns: 1fr; height: calc(100vh - 120px); }
-  .orgpanel { position: absolute; right: 0; top: 0; bottom: 0; width: 290px; z-index: 6; }
-  .orgwrap--collapsed .orgpanel { transform: translateX(100%); }
-}
-
-/* ---------- Marca ---------- */
-.brand__logo { width: 44px; height: auto; flex: 0 0 auto; filter: drop-shadow(0 2px 6px rgba(0,0,0,.18)); }
-.login-logo { width: 120px; height: auto; margin: 0 auto 4px; display: block; }
-.login-brand { flex-direction: column; text-align: center; gap: 6px; }
-[data-theme="dark"] .brand__logo { filter: drop-shadow(0 2px 8px rgba(125,191,230,.35)); }
-
-/* ---------- Menú lateral retráctil ---------- */
-.collapse-btn { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid var(--border);
-  background: var(--surface); color: var(--muted); padding: 8px 12px; border-radius: 10px; cursor: pointer;
-  font-family: var(--font-display); font-weight: 700; font-size: .8rem; margin-bottom: 10px; }
-.collapse-btn:hover { background: var(--surface-2); color: var(--text); }
-.app--collapsed { grid-template-columns: 78px 1fr; }
-.app--collapsed .sidebar { padding: 20px 10px; }
-.app--collapsed .brand__txt,
-.app--collapsed .collapse-txt,
-.app--collapsed .sidebar__foot .muted { display: none; }
-.app--collapsed .brand { justify-content: center; padding: 6px 0 18px; }
-.app--collapsed .nav__item { justify-content: center; padding: 12px 0; gap: 0; font-size: 0; }
-.app--collapsed .nav__item .nav__ico { width: 20px; height: 20px; }
-.app--collapsed .nav__item--active::before { left: -10px; }
-.app--collapsed .collapse-btn { justify-content: center; padding: 8px; }
-/* Etiqueta flotante al pasar el cursor cuando está contraído */
-.app--collapsed .nav__item { position: relative; }
-.app--collapsed .nav__item::after { content: attr(data-label); position: absolute; left: calc(100% + 10px); top: 50%;
-  transform: translateY(-50%); background: var(--surface); border: 1px solid var(--border); color: var(--text);
-  padding: 6px 11px; border-radius: 9px; font-size: .8rem; font-weight: 700; white-space: nowrap;
-  box-shadow: var(--shadow); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 60; }
-.app--collapsed .nav__item:hover::after { opacity: 1; }
-@media (max-width: 900px) { .app--collapsed { grid-template-columns: 1fr; } .app--collapsed .sidebar { width: 264px; padding: 20px 14px; } 
-  .app--collapsed .brand__txt, .app--collapsed .collapse-txt, .app--collapsed .sidebar__foot .muted { display: block; }
-  .app--collapsed .nav__item { justify-content: flex-start; padding: 11px 13px; gap: 12px; font-size: .9rem; } }
-
-/* ---------- Exportador con selección de campos ---------- */
-.expgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; max-height: 46vh; overflow-y: auto; padding-right: 4px; }
-.expgroup h4 { font-family: var(--font-display); font-size: .74rem; font-weight: 900; text-transform: uppercase;
-  letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
-.expchk { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: .84rem; cursor: pointer; }
-.expchk input { accent-color: var(--orange); width: 15px; height: 15px; cursor: pointer; }
-.expchk:hover { color: var(--orange); }
-
-
 /* ============================================================================
  * ORGANIGRAMA — lienzo tipo Visio + panel retráctil "liquid glass"
  * ==========================================================================*/
@@ -388,15 +250,7 @@ textarea.input { resize: vertical; }
     var(--surface);
 }
 /* Retícula sutil, como papel de diagrama */
-.orgcanvas { position: absolute; inset: 0; overflow: hidden; cursor: grab;
-  /* Papel cuadriculado: la retícula fina guía y las líneas marcadas coinciden
-     con la rejilla magnética (220 x 96) a la que se alinean las cajas. */
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--text) 9%, transparent) 1px, transparent 1px),
-    linear-gradient(color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px);
-  background-size: 220px 96px, 220px 96px, 55px 48px, 55px 48px; }
+.orgcanvas { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
 .orgcanvas.is-pan { cursor: grabbing; }
 .orglinks { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: visible; pointer-events: none; }
 .orglink { fill: none; stroke: color-mix(in srgb, var(--celeste) 70%, var(--border)); stroke-width: 2.5; stroke-linecap: round; }
@@ -455,3 +309,17 @@ textarea.input { resize: vertical; }
   .orgpanel { width: calc(100% - 28px); }
 }
 
+
+/* ---------- Organigrama a pantalla completa ---------- */
+.orgwrap--full { position: fixed; inset: 0; z-index: 500; height: 100vh !important;
+  border-radius: 0; border: 0; animation: fadeIn .18s; }
+body.has-orgfull { overflow: hidden; }
+.orgfull__exit { position: absolute; top: 16px; left: 16px; z-index: 520;
+  border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 9px 18px; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; font-size: .84rem; color: var(--text);
+  background: linear-gradient(150deg, rgba(255,255,255,.3), rgba(255,255,255,.1));
+  backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 6px 20px rgba(10,20,45,.2); }
+[data-theme="dark"] .orgfull__exit { background: linear-gradient(150deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); border-color: rgba(255,255,255,.18); }
+.orgfull__exit:hover { color: var(--orange); }
+@keyframes fadeIn { from { opacity: 0; } }

@@ -30,6 +30,8 @@ App.UI.route('organizacion', async function (main) {
   let nodos = Array.isArray(cfg.nodos) ? cfg.nodos.map(normalizar) : [];
   const view = Object.assign({ x: 40, y: 30, k: 1 }, cfg.view || {});
   let seleccion = null, panelAbierto = true, guardando = null;
+  let verInactivos = cfg.verInactivos !== false;   // filtro activos/inactivos
+  let pantallaCompleta = false;
 
   const COLORES = [
     ['navy', 'var(--navy)'], ['celeste', 'var(--celeste)'], ['naranja', 'var(--orange)'],
@@ -187,6 +189,35 @@ App.UI.route('organizacion', async function (main) {
     view.y = Math.round((ch - (maxY - minY) * view.k) / 2 - minY * view.k);
   }
 
+  // Pantalla completa: el lienzo ocupa toda la ventana y se encuadra el
+  // organigrama entero. Un botón (o Esc) regresa a la vista normal.
+  function togglePantallaCompleta() {
+    pantallaCompleta = !pantallaCompleta;
+    const wrap = main.querySelector('.orgwrap');
+    const btn = main.querySelector('#fitBtn');
+    if (!wrap) return;
+    wrap.classList.toggle('orgwrap--full', pantallaCompleta);
+    document.body.classList.toggle('has-orgfull', pantallaCompleta);
+    if (btn) btn.textContent = pantallaCompleta ? '⤡ Salir' : '⤢ Pantalla completa';
+
+    // Botón de regreso flotante dentro del lienzo
+    let salir = wrap.querySelector('#fullExit');
+    if (pantallaCompleta && !salir) {
+      salir = document.createElement('button');
+      salir.id = 'fullExit'; salir.className = 'orgfull__exit';
+      salir.innerHTML = '⤡ Salir de pantalla completa';
+      salir.onclick = () => togglePantallaCompleta();
+      wrap.appendChild(salir);
+    } else if (!pantallaCompleta && salir) salir.remove();
+
+    // Reencuadrar tras la transición de tamaño
+    setTimeout(() => { ajustar(); guardar(); pintar(); }, 60);
+  }
+
+  // Esc también sale de pantalla completa
+  const escHandler = (ev) => { if (ev.key === 'Escape' && pantallaCompleta) togglePantallaCompleta(); };
+  document.addEventListener('keydown', escHandler);
+
   const guardar = () => {
     clearTimeout(guardando);
     guardando = setTimeout(() => R.orgChartRepository.save({ nodos, view, v2: true }).catch(() => {}), 400);
@@ -198,8 +229,9 @@ App.UI.route('organizacion', async function (main) {
       <div class="page-head">
         <div><h1>Organización</h1><p class="muted">Organigrama editable · arrastra las cajas para acomodarlas</p></div>
         <div class="row-gap">
+          <label class="switch"><input type="checkbox" id="verInact" ${verInactivos ? 'checked' : ''}><span>Mostrar inactivos</span></label>
           <button class="btn btn--ghost btn--sm" id="autoBtn" title="Acomodar en árbol">✧ Auto-acomodar</button>
-          <button class="btn btn--ghost btn--sm" id="fitBtn" title="Ver todo">⤢ Ajustar</button>
+          <button class="btn btn--ghost btn--sm" id="fitBtn" title="Ver todo el organigrama en pantalla completa">⤢ Pantalla completa</button>
           <button class="btn btn--ghost btn--sm" id="zoomOut">−</button>
           <button class="btn btn--ghost btn--sm" id="zoomIn">+</button>
           <button class="btn btn--primary btn--sm" id="addBtn">+ Nueva caja</button>
@@ -225,10 +257,15 @@ App.UI.route('organizacion', async function (main) {
     if (!nodes) return;
     nodes.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`;
     links.style.transform = nodes.style.transform;
-    sincronizarRejilla();
 
-    // Cajas
-    const html = await Promise.all(nodos.map(async (n) => {
+    // Cajas (respetando el filtro de inactivos)
+    const visibles = nodos.filter((n) => {
+      if (verInactivos) return true;
+      const e = n.empId ? porId.get(n.empId) : null;
+      return !e || e.estado === 'ACTIVO';
+    });
+    const idsVisibles = new Set(visibles.map((n) => n.id));
+    const html = await Promise.all(visibles.map(async (n) => {
       const e = n.empId ? porId.get(n.empId) : null;
       const av = e ? await U.avatarHTML(e, 38) : `<span class="orgnode__ico">▦</span>`;
       const inactivo = e && e.estado !== 'ACTIVO';
@@ -247,11 +284,11 @@ App.UI.route('organizacion', async function (main) {
     nodes.innerHTML = html.join('');
 
     // Conectores: el estilo lo decide el usuario (ortogonal, curva o recta).
-    const pos = new Map(nodos.map((n) => [n.id, n]));
+    const pos = new Map(visibles.map((n) => [n.id, n]));
     const estilo = view.linea || 'ortogonal';
     let paths = '';
-    nodos.forEach((n) => {
-      const p = n.padre && pos.get(n.padre); if (!p) return;
+    visibles.forEach((n) => {
+      const p = n.padre && pos.get(n.padre); if (!p || !idsVisibles.has(p.id)) return;
       const x1 = p.x + W / 2, y1 = p.y + H, x2 = n.x + W / 2, y2 = n.y;
       const my = y1 + Math.max(22, (y2 - y1) / 2);
       let d;
@@ -266,23 +303,13 @@ App.UI.route('organizacion', async function (main) {
       paths += `<path d="${d}" class="orglink"/>`;
     });
     links.innerHTML = paths;
-    const maxX = Math.max(600, ...nodos.map((n) => n.x + W + 100));
-    const maxY = Math.max(400, ...nodos.map((n) => n.y + H + 100));
+    const maxX = Math.max(600, ...visibles.map((n) => n.x + W + 100));
+    const maxY = Math.max(400, ...visibles.map((n) => n.y + H + 100));
     links.setAttribute('viewBox', `0 0 ${maxX} ${maxY}`);
     links.setAttribute('width', maxX); links.setAttribute('height', maxY);
 
     wireNodos();
     panelHTML();
-  }
-
-  // La retícula del fondo acompaña al paneo y al zoom para que las cajas
-  // siempre se vean encajadas en los cuadros.
-  function sincronizarRejilla() {
-    const c = main.querySelector('#canvas');
-    if (!c) return;
-    const gx = GRID_X * view.k, gy = GRID_Y * view.k;
-    c.style.backgroundSize = `${gx}px ${gy}px, ${gx}px ${gy}px, ${gx / 4}px ${gy / 2}px, ${gx / 4}px ${gy / 2}px`;
-    c.style.backgroundPosition = `${view.x}px ${view.y}px`;
   }
 
   const colorVar = (c) => (COLORES.find((x) => x[0] === c) || COLORES[1])[1];
@@ -293,7 +320,12 @@ App.UI.route('organizacion', async function (main) {
 
     main.querySelector('#addBtn').onclick = () => nuevaCaja();
     main.querySelector('#autoBtn').onclick = () => { nodos = autoLayout(nodos); ajustar(); guardar(); pintar(); };
-    main.querySelector('#fitBtn').onclick = () => { ajustar(); guardar(); pintar(); };
+    main.querySelector('#fitBtn').onclick = () => togglePantallaCompleta();
+    main.querySelector('#verInact').onchange = (ev) => {
+      verInactivos = ev.target.checked;
+      R.orgChartRepository.save({ nodos, view, v2: true, verInactivos }).catch(() => {});
+      pintar();
+    };
     main.querySelector('#zoomIn').onclick = () => { view.k = Math.min(1.6, view.k + 0.1); guardar(); pintar(); };
     main.querySelector('#zoomOut').onclick = () => { view.k = Math.max(0.4, view.k - 0.1); guardar(); pintar(); };
     main.querySelector('#panelTab').onclick = () => {
@@ -314,7 +346,7 @@ App.UI.route('organizacion', async function (main) {
       if (!pan) return;
       view.x += ev.clientX - px; view.y += ev.clientY - py; px = ev.clientX; py = ev.clientY;
       const n = main.querySelector('#nodes'), l = main.querySelector('#links');
-      if (n) { n.style.transform = l.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`; sincronizarRejilla(); }
+      if (n) { n.style.transform = l.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.k})`; }
     });
     window.addEventListener('mouseup', () => { if (pan) { pan = false; canvas.classList.remove('is-pan'); guardar(); } });
   }
