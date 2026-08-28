@@ -24,7 +24,7 @@ const dom=new JSDOM(fs.readFileSync(ROOT+'/index.html','utf8'),{url:'http://loca
 const{window}=dom;const document=window.document;
 window.XLSX=XLSX; window.supabase={createClient:()=>makeClient()};
 window.URL.createObjectURL=()=>'x';window.URL.revokeObjectURL=()=>{};
-window.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){},clearRect(){},fillRect(){},set fillStyle(v){}});
+window.HTMLCanvasElement.prototype.getContext=()=>({drawImage(){},clearRect(){},fillRect(){},set fillStyle(v){}});window.SVGElement&&0;
 window.HTMLCanvasElement.prototype.toDataURL=()=>'data:image/jpeg;base64,MOCK';
 const load=r=>window.eval(fs.readFileSync(path.join(ROOT,r),'utf8'));
 ['js/config.js','js/supabase.js','js/db.js','js/repositories.js','js/calc.js','js/charts.js','js/import.js','js/ui.js',
