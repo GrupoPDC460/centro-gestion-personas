@@ -1,135 +1,316 @@
-/* views/organization.js — Organigrama: automático por jefatura + edición manual.
- * Los ajustes manuales (reasignar jefe, ocultar, orden) se guardan en la nube y
- * tienen prioridad sobre lo que venga del Excel. */
+/* ============================================================================
+ * views/organization.js — Organigrama tipo lienzo (estilo Visio)
+ * - Cajas colocables y arrastrables sobre un lienzo con paneo y zoom.
+ * - Conectores dibujados en SVG entre jefe y dependientes.
+ * - Panel lateral retráctil (liquid glass) para crear cajas, editar nombre,
+ *   puesto y dependencia, o arrastrar colaboradores existentes al lienzo.
+ * - Todo se guarda en la nube (tabla cgp_organigrama).
+ * ==========================================================================*/
 App.UI.route('organizacion', async function (main) {
   const R = App.Repos, U = App.UI;
-  const todos = await R.employeeRepository.all();
+
+  const emps = await R.employeeRepository.all();
   const puestos = await R.positionRepository.all();
   const puestoNombre = (e) => (puestos.find((p) => p.id === e.puestoId) || {}).nombre || '';
 
+  // ---------------- Estado ----------------
   const cfg = (await R.orgChartRepository.load()) || {};
-  const overrides = cfg.overrides || {};   // { empId: codigoJefe | '' (raíz) }
-  const ocultos = new Set(cfg.ocultos || []);
-  let modoEdicion = false;
+  // nodos: { id, nombre, puesto, x, y, parent, empId?, color }
+  let nodos = Array.isArray(cfg.nodos) ? cfg.nodos.slice() : [];
+  let vista = cfg.vista || { x: 40, y: 30, z: 1 };
+  let panelAbierto = cfg.panelAbierto !== false;
+  let seleccion = null;
 
-  const emps = todos.filter((e) => e.estado === 'ACTIVO' && !ocultos.has(e.id));
-  const porCodigo = new Map(emps.map((e) => [String(e.codigo), e]));
-  const porId = new Map(todos.map((e) => [e.id, e]));
+  const COLORES = ['#00216f', '#ff5100', '#7dbfe6', '#f3b24e', '#5db9a3', '#8e7cc3'];
+  const NODO_W = 190, NODO_H = 92;
+  const uid = () => 'n' + Math.random().toString(36).slice(2, 9);
+  const guardar = () => R.orgChartRepository.save({ nodos, vista, panelAbierto });
 
-  // Jefe efectivo: override manual > código de líder > supervisor por nombre.
-  function jefeDe(e) {
-    if (Object.prototype.hasOwnProperty.call(overrides, e.id)) return String(overrides[e.id] || '');
-    if (e.jefeCodigo && porCodigo.has(String(e.jefeCodigo))) return String(e.jefeCodigo);
-    const sup = String(e.supervisorNombre || '').trim().toLowerCase();
-    if (sup) {
-      const m = emps.find((x) => String(x.nombreCompleto || '').trim().toLowerCase() === sup);
-      if (m && m.id !== e.id) return String(m.codigo);
-    }
-    return '';
-  }
+  // Primera vez: construir desde la jerarquía real (jefe / supervisor).
+  if (!nodos.length) nodos = autoGenerar();
 
-  function construir() {
-    const hijos = new Map(); const raices = [];
-    emps.forEach((e) => {
-      const j = jefeDe(e);
-      if (j && porCodigo.has(j) && j !== String(e.codigo)) {
-        if (!hijos.has(j)) hijos.set(j, []);
-        hijos.get(j).push(e);
-      } else raices.push(e);
-    });
-    // Evitar ciclos: si un nodo es su propio ancestro, se sube a raíz.
-    const seguro = (e, vistos) => {
-      const j = jefeDe(e);
-      if (!j || !porCodigo.has(j)) return true;
-      if (vistos.has(j)) return false;
-      vistos.add(j);
-      return seguro(porCodigo.get(j), vistos);
+  function autoGenerar() {
+    const activos = emps.filter((e) => e.estado === 'ACTIVO');
+    const porCodigo = new Map(activos.map((e) => [String(e.codigo), e]));
+    const jefeDe = (e) => {
+      if (e.jefeCodigo && porCodigo.has(String(e.jefeCodigo)) && String(e.jefeCodigo) !== String(e.codigo)) return String(e.jefeCodigo);
+      const sup = String(e.supervisorNombre || '').trim().toLowerCase();
+      if (sup) { const m = activos.find((x) => String(x.nombreCompleto).trim().toLowerCase() === sup); if (m && m.id !== e.id) return String(m.codigo); }
+      return '';
     };
-    emps.forEach((e) => {
-      if (!seguro(e, new Set([String(e.codigo)]))) {
-        const j = jefeDe(e);
-        const arr = hijos.get(j); if (arr) hijos.set(j, arr.filter((x) => x.id !== e.id));
-        if (!raices.includes(e)) raices.push(e);
-      }
+    const idDe = new Map(); activos.forEach((e) => idDe.set(e.id, uid()));
+    const hijos = new Map(); const raices = [];
+    activos.forEach((e) => {
+      const j = jefeDe(e);
+      if (j && porCodigo.has(j)) { const p = porCodigo.get(j); if (!hijos.has(p.id)) hijos.set(p.id, []); hijos.get(p.id).push(e); }
+      else raices.push(e);
     });
-    const cuenta = (e) => { const k = hijos.get(String(e.codigo)) || []; return k.reduce((s, x) => s + 1 + cuenta(x), 0); };
-    raices.sort((a, b) => cuenta(b) - cuenta(a));
-    return { hijos, raices };
+    const out = []; let cursorX = 0;
+    const colocar = (e, nivel, parentNodeId) => {
+      const kids = hijos.get(e.id) || [];
+      let x;
+      if (kids.length) {
+        const xs = kids.map((k) => colocar(k, nivel + 1, idDe.get(e.id)));
+        x = (Math.min(...xs) + Math.max(...xs)) / 2;
+      } else { x = cursorX; cursorX += NODO_W + 34; }
+      out.push({ id: idDe.get(e.id), nombre: e.nombreCompleto, puesto: puestoNombre(e) || 'Sin puesto',
+        x, y: nivel * (NODO_H + 70), parent: parentNodeId || null, empId: e.id, color: COLORES[nivel % COLORES.length] });
+      return x;
+    };
+    raices.forEach((r) => { colocar(r, 0, null); cursorX += 60; });
+    return out;
   }
 
-  async function nodo(e, hijos) {
-    const kids = (hijos.get(String(e.codigo)) || []).slice().sort((a, b) => String(a.nombreCompleto).localeCompare(String(b.nombreCompleto)));
-    const sub = kids.length ? `<div class="org__kids">${(await Promise.all(kids.map((k) => nodo(k, hijos)))).join('')}</div>` : '';
-    return `<div class="org__node">
-      <div class="org__card ${modoEdicion ? 'org__card--edit' : ''}" data-id="${e.id}" ${modoEdicion ? 'draggable="true"' : ''}>
-        ${await U.avatarHTML(e, 42)}
-        <div class="org__txt"><b>${U.esc(e.nombreCompleto)}</b><span class="muted">${U.esc(puestoNombre(e) || 'Sin puesto')}</span></div>
-        ${kids.length ? `<span class="org__count" title="${kids.length} a cargo">${kids.length}</span>` : ''}
-        ${modoEdicion ? `<button class="org__x" data-raiz="${e.id}" title="Mover a nivel superior">⤴</button>` : ''}
-      </div>${sub}</div>`;
+  // ---------------- Render ----------------
+  function medidas() {
+    if (!nodos.length) return { w: 1200, h: 700 };
+    const maxX = Math.max(...nodos.map((n) => n.x)) + NODO_W + 300;
+    const maxY = Math.max(...nodos.map((n) => n.y)) + NODO_H + 300;
+    return { w: Math.max(1200, maxX), h: Math.max(700, maxY) };
+  }
+
+  function conectores() {
+    const byId = new Map(nodos.map((n) => [n.id, n]));
+    return nodos.filter((n) => n.parent && byId.has(n.parent)).map((n) => {
+      const p = byId.get(n.parent);
+      const x1 = p.x + NODO_W / 2, y1 = p.y + NODO_H;
+      const x2 = n.x + NODO_W / 2, y2 = n.y;
+      const my = y1 + (y2 - y1) / 2;
+      return `<path d="M${x1},${y1} V${my} H${x2} V${y2}" fill="none" stroke="var(--border)" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="${x2}" cy="${y2}" r="3" fill="var(--border)"/>`;
+    }).join('');
+  }
+
+  async function cajaHTML(n) {
+    const emp = n.empId ? emps.find((e) => e.id === n.empId) : null;
+    const av = emp ? await U.avatarHTML(emp, 46) : `<span class="avatar" style="width:46px;height:46px;background:${n.color}">${U.esc((n.nombre || '?').slice(0, 1).toUpperCase())}</span>`;
+    return `<div class="onode ${seleccion === n.id ? 'is-sel' : ''}" data-n="${n.id}" style="left:${n.x}px;top:${n.y}px;--nc:${n.color}">
+      <div class="onode__bar"></div>
+      <div class="onode__av">${av}</div>
+      <div class="onode__body">
+        <b>${U.esc(n.nombre || 'Sin nombre')}</b>
+        <span>${U.esc(n.puesto || '')}</span>
+      </div>
+      <button class="onode__link" data-link="${n.id}" title="Conectar a un jefe">⛓</button>
+    </div>`;
   }
 
   async function pintar() {
-    const { hijos, raices } = construir();
-    const cuerpo = raices.length
-      ? (await Promise.all(raices.map((r) => nodo(r, hijos)))).join('')
-      : '<div class="empty"><h3>Sin jerarquía definida</h3><p>Activa “Editar organigrama” y arrastra a cada persona sobre su jefe.</p></div>';
+    const { w, h } = medidas();
+    const cajas = (await Promise.all(nodos.map(cajaHTML))).join('');
     main.innerHTML = `
-      <div class="page-head">
-        <div><h1>Organización</h1><p class="muted">${modoEdicion ? 'Arrastra una tarjeta sobre otra para asignar jefe · ⤴ la sube a nivel superior' : 'Organigrama por jefatura'}</p></div>
-        <div class="row-gap">
-          <button class="btn ${modoEdicion ? 'btn--good' : 'btn--ghost'}" id="edBtn">${modoEdicion ? '✓ Listo' : '✎ Editar organigrama'}</button>
-          ${modoEdicion ? '<button class="btn btn--ghost" id="resetBtn">Restablecer</button>' : ''}
+      <div class="orgwrap ${panelAbierto ? '' : 'orgwrap--collapsed'}">
+        <div class="orgcanvas" id="canvas">
+          <div class="orgstage" id="stage" style="width:${w}px;height:${h}px;transform:translate(${vista.x}px,${vista.y}px) scale(${vista.z})">
+            <svg class="orglines" width="${w}" height="${h}">${conectores()}</svg>
+            ${cajas}
+          </div>
+          <div class="orgtools glass">
+            <button class="orgtool" id="zIn" title="Acercar">＋</button>
+            <button class="orgtool" id="zOut" title="Alejar">－</button>
+            <button class="orgtool" id="zFit" title="Centrar">⤢</button>
+          </div>
+          <button class="orgtoggle glass" id="togglePanel" title="Mostrar/ocultar panel">${panelAbierto ? '›' : '‹'}</button>
         </div>
-      </div>
-      <div class="org">${cuerpo}</div>`;
+
+        <aside class="orgpanel glass" id="panel">
+          <div class="orgpanel__head">
+            <img src="assets/brand/pdc-3d.png" alt="" class="orgpanel__logo">
+            <div><b>Organigrama</b><span class="muted">Diseña la estructura</span></div>
+          </div>
+
+          <div class="orgpanel__scroll">
+            <button class="btn btn--primary" id="addBox" style="width:100%;justify-content:center">+ Nueva caja</button>
+
+            <div id="editor"></div>
+
+            <h4 class="form-sec">Colaboradores</h4>
+            <p class="muted" style="margin:-4px 0 8px">Arrastra una persona al lienzo para agregarla.</p>
+            <input class="input input--search" id="buscarEmp" placeholder="Buscar…" style="margin-bottom:8px">
+            <div class="orglist" id="listaEmps"></div>
+
+            <h4 class="form-sec">Acciones</h4>
+            <div class="row-gap">
+              <button class="btn btn--ghost btn--sm" id="autoBtn">Regenerar automático</button>
+              <button class="btn btn--ghost btn--sm" id="clearBtn">Vaciar</button>
+            </div>
+          </div>
+        </aside>
+      </div>`;
+    await pintarLista();
+    pintarEditor();
     wire();
   }
 
-  function wire() {
-    main.querySelector('#edBtn').onclick = () => { modoEdicion = !modoEdicion; pintar(); };
-    const rb = main.querySelector('#resetBtn');
-    if (rb) rb.onclick = async () => {
-      if (!(await U.confirm('Se descartan los ajustes manuales y el organigrama vuelve a construirse desde los datos de jefatura. ¿Continuar?', { ok: 'Restablecer' }))) return;
-      for (const k of Object.keys(overrides)) delete overrides[k];
-      ocultos.clear();
-      await guardar(); U.toast('Organigrama restablecido', 'ok'); pintar();
-    };
-
-    main.querySelectorAll('.org__card').forEach((c) => {
-      const id = +c.dataset.id;
-      if (!modoEdicion) { c.onclick = () => App.UI.navigate('empleados', { id }); return; }
-
-      c.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/plain', String(id)); c.classList.add('is-drag'); });
-      c.addEventListener('dragend', () => c.classList.remove('is-drag'));
-      c.addEventListener('dragover', (ev) => { ev.preventDefault(); c.classList.add('is-over'); });
-      c.addEventListener('dragleave', () => c.classList.remove('is-over'));
-      c.addEventListener('drop', async (ev) => {
-        ev.preventDefault(); c.classList.remove('is-over');
-        const arrastrado = +ev.dataTransfer.getData('text/plain');
-        if (!arrastrado || arrastrado === id) return;
-        const hijo = porId.get(arrastrado), jefe = porId.get(id);
-        if (!hijo || !jefe) return;
-        overrides[hijo.id] = String(jefe.codigo);
-        await guardar();
-        await R.employeeRepository.update(hijo.id, { jefeNombre: jefe.nombreCompleto, jefeCodigo: String(jefe.codigo) });
-        U.toast(`${hijo.nombreCompleto.split(' ')[0]} ahora reporta a ${jefe.nombreCompleto.split(' ')[0]}`, 'ok');
-        pintar();
-      });
-    });
-
-    main.querySelectorAll('[data-raiz]').forEach((b) => b.onclick = async (ev) => {
-      ev.stopPropagation();
-      const e = porId.get(+b.dataset.raiz); if (!e) return;
-      overrides[e.id] = '';
-      await guardar();
-      await R.employeeRepository.update(e.id, { jefeCodigo: '', jefeNombre: '' });
-      U.toast('Movido a nivel superior', 'ok'); pintar();
+  async function pintarLista(filtro) {
+    const cont = main.querySelector('#listaEmps'); if (!cont) return;
+    const q = (filtro || '').toLowerCase();
+    const usados = new Set(nodos.map((n) => n.empId).filter(Boolean));
+    const list = emps.filter((e) => e.estado === 'ACTIVO' && !usados.has(e.id) &&
+      (!q || String(e.nombreCompleto).toLowerCase().includes(q)));
+    if (!list.length) { cont.innerHTML = '<p class="muted">Todos colocados.</p>'; return; }
+    cont.innerHTML = (await Promise.all(list.slice(0, 60).map(async (e) => `
+      <div class="orgitem" draggable="true" data-emp="${e.id}">
+        ${await U.avatarHTML(e, 28)}
+        <div><b>${U.esc(e.nombreCompleto)}</b><span class="muted">${U.esc(puestoNombre(e) || '')}</span></div>
+      </div>`))).join('');
+    cont.querySelectorAll('.orgitem').forEach((it) => {
+      it.addEventListener('dragstart', (ev) => ev.dataTransfer.setData('text/plain', 'emp:' + it.dataset.emp));
     });
   }
 
-  const guardar = () => R.orgChartRepository.save({ overrides, ocultos: Array.from(ocultos) });
+  function pintarEditor() {
+    const box = main.querySelector('#editor'); if (!box) return;
+    const n = nodos.find((x) => x.id === seleccion);
+    if (!n) { box.innerHTML = '<p class="muted" style="margin-top:14px">Selecciona una caja para editarla.</p>'; return; }
+    const otros = nodos.filter((x) => x.id !== n.id);
+    box.innerHTML = `
+      <h4 class="form-sec">Caja seleccionada</h4>
+      <label class="f"><span>Nombre</span><input class="input" id="eNombre" value="${U.esc(n.nombre || '')}"></label>
+      <label class="f"><span>Puesto</span><input class="input" id="ePuesto" value="${U.esc(n.puesto || '')}"></label>
+      <label class="f"><span>Depende de</span>
+        <select class="input" id="eParent">
+          <option value="">— Nivel superior —</option>
+          ${otros.map((o) => `<option value="${o.id}" ${n.parent === o.id ? 'selected' : ''}>${U.esc(o.nombre)}</option>`).join('')}
+        </select></label>
+      <div class="f"><span>Color</span><div class="swatches">
+        ${COLORES.map((c) => `<button class="sw ${n.color === c ? 'is-on' : ''}" data-c="${c}" style="background:${c}"></button>`).join('')}
+      </div></div>
+      <div class="row-gap" style="margin-top:10px">
+        <button class="btn btn--danger btn--sm" id="delNodo">Eliminar caja</button>
+      </div>`;
+
+    const upd = async (patch) => { Object.assign(n, patch); await guardar(); pintar(); };
+    box.querySelector('#eNombre').onchange = (ev) => upd({ nombre: ev.target.value });
+    box.querySelector('#ePuesto').onchange = (ev) => upd({ puesto: ev.target.value });
+    box.querySelector('#eParent').onchange = (ev) => {
+      const nuevo = ev.target.value || null;
+      if (nuevo && creaCiclo(n.id, nuevo)) { U.toast('Esa dependencia crearía un ciclo', 'warn'); return pintar(); }
+      upd({ parent: nuevo });
+    };
+    box.querySelectorAll('.sw').forEach((b) => b.onclick = () => upd({ color: b.dataset.c }));
+    box.querySelector('#delNodo').onclick = async () => {
+      if (!(await U.confirm('¿Eliminar esta caja? Sus dependientes subirán un nivel.', { danger: true, ok: 'Eliminar' }))) return;
+      nodos.filter((x) => x.parent === n.id).forEach((x) => { x.parent = n.parent; });
+      nodos = nodos.filter((x) => x.id !== n.id);
+      seleccion = null; await guardar(); pintar();
+    };
+  }
+
+  function creaCiclo(hijoId, nuevoParent) {
+    const byId = new Map(nodos.map((n) => [n.id, n]));
+    let cur = nuevoParent, guard = 0;
+    while (cur && guard++ < 200) { if (cur === hijoId) return true; cur = (byId.get(cur) || {}).parent; }
+    return false;
+  }
+
+  // ---------------- Interacción ----------------
+  function wire() {
+    const canvas = main.querySelector('#canvas');
+    const stage = main.querySelector('#stage');
+    const aplicarVista = () => { stage.style.transform = `translate(${vista.x}px,${vista.y}px) scale(${vista.z})`; };
+
+    // Paneo del lienzo
+    let pan = false, px = 0, py = 0;
+    canvas.addEventListener('mousedown', (ev) => {
+      if (ev.target.closest('.onode') || ev.target.closest('.orgtools') || ev.target.closest('.orgtoggle')) return;
+      pan = true; px = ev.clientX; py = ev.clientY; canvas.classList.add('is-pan');
+      seleccion = null; main.querySelectorAll('.onode').forEach((c) => c.classList.remove('is-sel')); pintarEditor();
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if (!pan) return; vista.x += ev.clientX - px; vista.y += ev.clientY - py; px = ev.clientX; py = ev.clientY; aplicarVista();
+    });
+    window.addEventListener('mouseup', () => { if (pan) { pan = false; canvas.classList.remove('is-pan'); guardar(); } });
+
+    // Zoom
+    canvas.addEventListener('wheel', (ev) => {
+      if (!ev.ctrlKey && !ev.metaKey) return;
+      ev.preventDefault(); vista.z = Math.min(2, Math.max(.35, vista.z - ev.deltaY * .0015)); aplicarVista();
+    }, { passive: false });
+    main.querySelector('#zIn').onclick = () => { vista.z = Math.min(2, vista.z + .15); aplicarVista(); guardar(); };
+    main.querySelector('#zOut').onclick = () => { vista.z = Math.max(.35, vista.z - .15); aplicarVista(); guardar(); };
+    main.querySelector('#zFit').onclick = () => { vista = { x: 40, y: 30, z: 1 }; aplicarVista(); guardar(); };
+
+    // Arrastrar cajas
+    main.querySelectorAll('.onode').forEach((el) => {
+      const n = nodos.find((x) => x.id === el.dataset.n);
+      let drag = false, ox = 0, oy = 0;
+      el.addEventListener('mousedown', (ev) => {
+        if (ev.target.closest('[data-link]')) return;
+        ev.stopPropagation(); drag = true; ox = ev.clientX; oy = ev.clientY;
+        seleccion = n.id;
+        main.querySelectorAll('.onode').forEach((c) => c.classList.toggle('is-sel', c === el));
+        pintarEditor(); el.classList.add('is-drag');
+      });
+      window.addEventListener('mousemove', (ev) => {
+        if (!drag) return;
+        n.x += (ev.clientX - ox) / vista.z; n.y += (ev.clientY - oy) / vista.z;
+        ox = ev.clientX; oy = ev.clientY;
+        el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+        main.querySelector('.orglines').innerHTML = conectores();
+      });
+      window.addEventListener('mouseup', async () => {
+        if (!drag) return; drag = false; el.classList.remove('is-drag'); await guardar();
+      });
+      el.addEventListener('dblclick', () => { if (n.empId) App.UI.navigate('empleados', { id: n.empId }); });
+    });
+
+    // Conectar: clic en ⛓ y luego en el jefe
+    let enlazando = null;
+    main.querySelectorAll('[data-link]').forEach((b) => b.onclick = (ev) => {
+      ev.stopPropagation();
+      enlazando = b.dataset.link;
+      U.toast('Ahora haz clic en la caja del jefe', 'info');
+      main.querySelectorAll('.onode').forEach((c) => {
+        if (c.dataset.n === enlazando) return;
+        c.classList.add('is-target');
+        c.addEventListener('click', async function pick(e2) {
+          e2.stopPropagation();
+          const hijo = nodos.find((x) => x.id === enlazando);
+          if (hijo && !creaCiclo(hijo.id, c.dataset.n)) { hijo.parent = c.dataset.n; await guardar(); }
+          else U.toast('Esa dependencia crearía un ciclo', 'warn');
+          enlazando = null; pintar();
+        }, { once: true });
+      });
+    });
+
+    // Soltar colaborador desde el panel
+    canvas.addEventListener('dragover', (ev) => ev.preventDefault());
+    canvas.addEventListener('drop', async (ev) => {
+      ev.preventDefault();
+      const data = ev.dataTransfer.getData('text/plain') || '';
+      if (!data.startsWith('emp:')) return;
+      const emp = emps.find((e) => e.id === +data.slice(4)); if (!emp) return;
+      const r = canvas.getBoundingClientRect();
+      nodos.push({ id: uid(), nombre: emp.nombreCompleto, puesto: puestoNombre(emp) || 'Sin puesto',
+        x: (ev.clientX - r.left - vista.x) / vista.z - NODO_W / 2,
+        y: (ev.clientY - r.top - vista.y) / vista.z - NODO_H / 2,
+        parent: null, empId: emp.id, color: COLORES[nodos.length % COLORES.length] });
+      await guardar(); pintar();
+    });
+
+    // Panel
+    main.querySelector('#togglePanel').onclick = async () => { panelAbierto = !panelAbierto; await guardar(); pintar(); };
+    main.querySelector('#addBox').onclick = async () => {
+      nodos.push({ id: uid(), nombre: 'Nueva caja', puesto: '', x: (-vista.x + 260) / vista.z, y: (-vista.y + 160) / vista.z,
+        parent: null, empId: null, color: COLORES[nodos.length % COLORES.length] });
+      seleccion = nodos[nodos.length - 1].id;
+      await guardar(); pintar();
+    };
+    const be = main.querySelector('#buscarEmp');
+    if (be) be.oninput = () => pintarLista(be.value);
+    main.querySelector('#autoBtn').onclick = async () => {
+      if (!(await U.confirm('Se reconstruye el organigrama desde los datos de jefatura y se pierde el diseño actual. ¿Continuar?', { ok: 'Regenerar' }))) return;
+      nodos = autoGenerar(); seleccion = null; await guardar(); pintar();
+    };
+    main.querySelector('#clearBtn').onclick = async () => {
+      if (!(await U.confirm('¿Vaciar el lienzo por completo?', { danger: true, ok: 'Vaciar' }))) return;
+      nodos = []; seleccion = null; await guardar(); pintar();
+    };
+  }
+
   await pintar();
+  await guardar();
 });
 
 /* views/emergency.js — Árbol de emergencia */

@@ -255,3 +255,83 @@ textarea.input { resize: vertical; }
 .org__x { border: 0; background: var(--surface-2); color: var(--muted); border-radius: 8px; width: 26px; height: 26px; cursor: pointer; margin-left: 2px; }
 .org__x:hover { background: var(--orange); color: #fff; }
 .org__kids { margin-left: 26px; padding-left: 20px; border-left: 2px solid var(--border); margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ============================================================================
+ * Organigrama tipo lienzo + panel "liquid glass"
+ * ==========================================================================*/
+.glass {
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  backdrop-filter: blur(26px) saturate(180%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  border: 1px solid color-mix(in srgb, #fff 16%, var(--border));
+  box-shadow: 0 10px 40px rgba(0,0,0,.28), inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+}
+.orgwrap { position: relative; display: grid; grid-template-columns: 1fr 320px; gap: 0;
+  height: calc(100vh - 150px); min-height: 480px; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border); background: var(--surface); transition: grid-template-columns .32s cubic-bezier(.4,0,.2,1); }
+.orgwrap--collapsed { grid-template-columns: 1fr 0px; }
+
+/* Lienzo */
+.orgcanvas { position: relative; overflow: hidden; cursor: grab;
+  background-color: var(--bg-grad2);
+  background-image: radial-gradient(color-mix(in srgb, var(--muted) 26%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px; }
+.orgcanvas.is-pan { cursor: grabbing; }
+.orgstage { position: absolute; top: 0; left: 0; transform-origin: 0 0; transition: transform .12s ease-out; }
+.orglines { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+/* Cajas */
+.onode { position: absolute; width: 190px; min-height: 92px; border-radius: 16px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.16);
+  display: flex; flex-direction: column; align-items: center; padding: 0 10px 12px; cursor: grab;
+  transition: box-shadow .15s, border-color .15s, transform .08s; }
+.onode:hover { box-shadow: 0 12px 30px rgba(0,0,0,.24); }
+.onode.is-drag { cursor: grabbing; opacity: .9; box-shadow: 0 18px 44px rgba(0,0,0,.34); }
+.onode.is-sel { border-color: var(--nc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc) 32%, transparent), 0 12px 30px rgba(0,0,0,.24); }
+.onode.is-target { outline: 2px dashed var(--orange); outline-offset: 3px; }
+.onode__bar { height: 26px; width: calc(100% + 20px); margin: 0 -10px; background: var(--nc); }
+.onode__av { margin-top: -22px; border-radius: 50%; padding: 3px; background: var(--surface); }
+.onode__body { text-align: center; margin-top: 7px; line-height: 1.3; width: 100%; }
+.onode__body b { display: block; font-size: .84rem; font-weight: 800; color: var(--nc);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.onode__body span { display: block; font-size: .74rem; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.onode__link { position: absolute; top: 4px; right: 5px; border: 0; background: rgba(255,255,255,.25);
+  color: #fff; width: 20px; height: 20px; border-radius: 6px; cursor: pointer; font-size: .68rem; opacity: 0; transition: opacity .15s; }
+.onode:hover .onode__link { opacity: 1; }
+
+/* Controles flotantes */
+.orgtools { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column; gap: 4px; padding: 5px; border-radius: 14px; }
+.orgtool { border: 0; background: transparent; color: var(--text); width: 32px; height: 32px; border-radius: 9px; cursor: pointer; font-size: .95rem; font-weight: 700; }
+.orgtool:hover { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.orgtoggle { position: absolute; top: 14px; right: 14px; z-index: 5; width: 30px; height: 44px;
+  border-radius: 12px; cursor: pointer; color: var(--text); font-size: 1rem; font-weight: 800; }
+
+/* Panel lateral */
+.orgpanel { display: flex; flex-direction: column; border-left: 1px solid var(--border); border-radius: 0;
+  overflow: hidden; transition: opacity .25s; }
+.orgwrap--collapsed .orgpanel { opacity: 0; pointer-events: none; }
+.orgpanel__head { display: flex; align-items: center; gap: 11px; padding: 16px; border-bottom: 1px solid var(--border); }
+.orgpanel__logo { width: 40px; height: auto; }
+.orgpanel__head b { display: block; font-family: var(--font-display); font-weight: 900; font-size: .95rem; }
+.orgpanel__head .muted { font-size: .74rem; }
+.orgpanel__scroll { padding: 16px; overflow-y: auto; flex: 1; }
+.orglist { display: flex; flex-direction: column; gap: 5px; max-height: 250px; overflow-y: auto; }
+.orgitem { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 10px;
+  background: var(--surface-2); cursor: grab; font-size: .82rem; }
+.orgitem:hover { background: color-mix(in srgb, var(--celeste) 16%, var(--surface-2)); }
+.orgitem b { display: block; font-size: .8rem; font-weight: 700; }
+.orgitem .muted { font-size: .7rem; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; }
+.sw { width: 26px; height: 26px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; }
+.sw.is-on { border-color: var(--text); transform: scale(1.08); }
+
+/* Marca */
+.brand__logo { width: 42px; height: auto; flex: 0 0 auto; }
+.login-logo { width: 54px; height: auto; }
+
+@media (max-width: 900px) {
+  .orgwrap { grid-template-columns: 1fr; height: calc(100vh - 120px); }
+  .orgpanel { position: absolute; right: 0; top: 0; bottom: 0; width: 290px; z-index: 6; }
+  .orgwrap--collapsed .orgpanel { transform: translateX(100%); }
+}
