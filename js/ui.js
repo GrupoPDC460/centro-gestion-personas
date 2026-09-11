@@ -22,6 +22,10 @@ App.UI = (function () {
     setTimeout(() => { el.classList.add('toast--out'); setTimeout(() => el.remove(), 300); }, 3200);
   }
 
+  // Registro del modal actualmente abierto, para que la navegación del menú
+  // pueda preguntar antes de abandonar un formulario con cambios sin guardar.
+  let modalActivo = null;
+
   // ---------- Modales ----------
   function modal(html, opts) {
     opts = opts || {};
@@ -32,7 +36,26 @@ App.UI = (function () {
       <div class="modal__body">${html}</div>
       <div class="modal__foot"></div></div>`;
     document.body.appendChild(back);
-    const close = () => { back.classList.add('modal-back--out'); setTimeout(() => back.remove(), 200); };
+
+    // Detecta cambios sin guardar dentro del formulario para pedir confirmación
+    // antes de cerrar por la X, clic fuera, Esc o navegar a otra sección
+    // (nunca al pulsar un botón propio del modal, como Guardar o Cancelar).
+    let sucio = false;
+    if (opts.confirmClose !== false) {
+      back.querySelector('.modal__body').addEventListener('input', () => { sucio = true; }, true);
+      back.querySelector('.modal__body').addEventListener('change', () => { sucio = true; }, true);
+    }
+    const closeReal = () => {
+      back.classList.add('modal-back--out'); setTimeout(() => back.remove(), 200);
+      if (modalActivo && modalActivo.back === back) modalActivo = null;
+    };
+    const close = async () => {
+      if (sucio) {
+        const seguir = await confirm('Tienes cambios sin guardar. ¿Deseas cerrar y perderlos?', { title: 'Cambios sin guardar', danger: true, ok: 'Descartar cambios' });
+        if (!seguir) return;
+      }
+      closeReal();
+    };
     back.querySelector('.modal__x').onclick = close;
     back.onclick = (e) => { if (e.target === back && opts.dismissable !== false) close(); };
     const foot = back.querySelector('.modal__foot');
@@ -40,12 +63,33 @@ App.UI = (function () {
       const btn = document.createElement('button');
       btn.className = 'btn ' + (b.variant ? 'btn--' + b.variant : 'btn--ghost');
       btn.textContent = b.label;
-      btn.onclick = () => { const keep = b.onClick && b.onClick(back); if (!keep) close(); };
+      // Un botón explícito (Guardar, Cancelar, etc.) siempre puede cerrar sin
+      // preguntar: la confirmación es solo para cierres accidentales.
+      btn.onclick = () => { const keep = b.onClick && b.onClick(back); if (!keep) closeReal(); };
       foot.appendChild(btn);
     });
     document.addEventListener('keydown', function onEsc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); } });
+    modalActivo = { back, close, isDirty: () => sucio };
     return { el: back, close };
   }
+
+  // Si hay un modal abierto con cambios sin guardar, pregunta antes de seguir.
+  // Devuelve true cuando es seguro continuar con la navegación.
+  async function puedeNavegar() {
+    if (!modalActivo || !modalActivo.isDirty()) return true;
+    const seguir = await confirm('Tienes cambios sin guardar en el formulario abierto. ¿Deseas salir y perderlos?', { title: 'Cambios sin guardar', danger: true, ok: 'Salir sin guardar' });
+    if (seguir) modalActivo.close();
+    return seguir;
+  }
+
+  // Evita que Backspace fuera de un campo de texto dispare "atrás" del
+  // navegador (lo que sacaba de la app y perdía los cambios sin avisar).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Backspace') return;
+    const t = e.target;
+    const editable = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+    if (!editable) e.preventDefault();
+  });
 
   function confirm(msg, opts) {
     opts = opts || {};
@@ -130,5 +174,5 @@ App.UI = (function () {
     toast('Respaldo restaurado', 'ok');
   }
 
-  return { esc, fechaCorta, iniciales, colorFor, toast, modal, confirm, avatarHTML, route, navigate, render, initTheme, setTheme, toggleTheme, backup, restore };
+  return { esc, fechaCorta, iniciales, colorFor, toast, modal, confirm, avatarHTML, route, navigate, render, initTheme, setTheme, toggleTheme, backup, restore, puedeNavegar };
 })();

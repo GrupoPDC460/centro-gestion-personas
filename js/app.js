@@ -54,6 +54,16 @@
     document.getElementById('menuBtn').onclick = () => document.getElementById('sidebar').classList.toggle('sidebar--open');
     document.getElementById('themeBtn').onclick = () => U.toggleTheme();
 
+    // Si hay un formulario con cambios sin guardar abierto, confirmar antes de
+    // navegar a otra sección desde el menú (evita perder datos sin avisar).
+    document.querySelectorAll('.nav__item[href^="#"]').forEach((a) => {
+      a.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        const ok = await U.puedeNavegar();
+        if (ok) location.hash = a.getAttribute('href');
+      });
+    });
+
     // Menú retráctil (recuerda la preferencia)
     const app = document.querySelector('.app');
     const cb = document.getElementById('collapseBtn');
