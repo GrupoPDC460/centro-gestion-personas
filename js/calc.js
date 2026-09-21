@@ -129,7 +129,12 @@
       let next = new Date(y, fn.getMonth(), fn.getDate());
       if (next < startOfDay) next = new Date(y + 1, fn.getMonth(), fn.getDate());
       const diffDays = Math.round((next - startOfDay) / 86400000);
-      const item = { colaborador: c, fecha: next, dia: fn.getDate(), mes: fn.getMonth(), edad: next.getFullYear() - fn.getFullYear(), diffDays };
+      // Edad ACTUAL (ya cumplida hoy), no la que cumplirá en su próximo cumpleaños.
+      // Si el cumpleaños aún no llegó este año → edad = año_actual - año_nac - 1
+      // Si ya llegó (o es hoy)              → edad = año_actual - año_nac
+      const cumplioEsteAño = new Date(y, fn.getMonth(), fn.getDate()) <= startOfDay;
+      const edad = y - fn.getFullYear() - (cumplioEsteAño ? 0 : 1);
+      const item = { colaborador: c, fecha: next, dia: fn.getDate(), mes: fn.getMonth(), edad, diffDays };
       if (diffDays === 0) out.hoy.push(item);
       if (diffDays >= 0 && diffDays <= 7) out.semana.push(item);
       if (fn.getMonth() === ref.getMonth()) out.mes.push(item);
