@@ -9,6 +9,10 @@
     ]);
     const depName = Object.fromEntries(deptos.map((d) => [d.id, d.nombre]));
     const posName = Object.fromEntries(puestos.map((d) => [d.id, d.nombre]));
+    // Listas de líderes y jefes directos (valores de texto, únicos y válidos)
+    const _clean = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
+    const lideres = [...new Set(emps.map((e) => _clean(e.ultimoLiderNombre || e.supervisorNombre)).filter(Boolean))].sort();
+    const jefes = [...new Set(emps.map((e) => _clean(e.jefeNombre)).filter(Boolean))].sort();
 
     main.innerHTML = `
       <div class="page-head"><div><h1>Colaboradores</h1><p class="muted"><span id="cont">${emps.length}</span> registros</p></div>
@@ -29,6 +33,8 @@
           </div>
           <select id="fDep" class="input input--pill"><option value="">Departamento: todos</option>${deptos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
           <select id="fPue" class="input input--pill"><option value="">Puesto: todos</option>${puestos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
+          <select id="fLid" class="input input--pill"><option value="">Líder directo: todos</option>${lideres.map((n) => `<option value="${U().esc(n)}">${U().esc(n)}</option>`).join('')}</select>
+          <select id="fJef" class="input input--pill"><option value="">Jefe directo: todos</option>${jefes.map((n) => `<option value="${U().esc(n)}">${U().esc(n)}</option>`).join('')}</select>
           <select id="fGen" class="input input--pill"><option value="">Género: todos</option><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option></select>
           <select id="fAnt" class="input input--pill"><option value="">Antigüedad: toda</option>${Object.entries(C().CAT_ANTIGUEDAD).filter(([k]) => k !== 'sin_dato').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
           <button class="btn btn--ghost btn--sm" id="limpiar" title="Quitar filtros">Limpiar</button>
@@ -36,13 +42,15 @@
       </div>
       <div id="tabla" class="table-wrap"></div>`;
 
-    const st = { q: '', dep: '', pue: '', est: '', gen: '', ant: '', view: 'cards' };
+    const st = { q: '', dep: '', pue: '', lid: '', jef: '', est: '', gen: '', ant: '', view: 'cards' };
     const UBIC = [['EN_SITIO', 'En sitio'], ['REMOTO', 'Remoto'], ['VACACIONES', 'Vacaciones'], ['PERMISO', 'Permiso'], ['INCAPACIDAD', 'Incapacidad'], ['AUSENTE', 'Ausente']];
     async function pintar() {
       const q = st.q.toLowerCase();
       let list = emps.filter((e) => {
         if (st.dep && String(e.departamentoId) !== st.dep) return false;
         if (st.pue && String(e.puestoId) !== st.pue) return false;
+        if (st.lid && _clean(e.ultimoLiderNombre || e.supervisorNombre) !== st.lid) return false;
+        if (st.jef && _clean(e.jefeNombre) !== st.jef) return false;
         if (st.est && e.estado !== st.est) return false;
         if (st.gen && !new RegExp('^' + st.gen[0], 'i').test(e.genero)) return false;
         if (st.ant && C().antiguedad(e.fechaIngreso).categoria !== st.ant) return false;
@@ -170,6 +178,8 @@
     document.getElementById('buscar').oninput = (e) => { st.q = e.target.value; pintar(); };
     document.getElementById('fDep').onchange = (e) => { st.dep = e.target.value; pintar(); };
     document.getElementById('fPue').onchange = (e) => { st.pue = e.target.value; pintar(); };
+    document.getElementById('fLid').onchange = (e) => { st.lid = e.target.value; pintar(); };
+    document.getElementById('fJef').onchange = (e) => { st.jef = e.target.value; pintar(); };
     document.getElementById('fGen').onchange = (e) => { st.gen = e.target.value; pintar(); };
     document.getElementById('fAnt').onchange = (e) => { st.ant = e.target.value; pintar(); };
     document.getElementById('nuevoBtn').onclick = () => form(null);
@@ -193,9 +203,9 @@
 
     // Limpiar filtros
     document.getElementById('limpiar').onclick = () => {
-      st.q = ''; st.dep = ''; st.pue = ''; st.est = ''; st.gen = ''; st.ant = '';
+      st.q = ''; st.dep = ''; st.pue = ''; st.lid = ''; st.jef = ''; st.est = ''; st.gen = ''; st.ant = '';
       document.getElementById('buscar').value = '';
-      ['fDep', 'fPue', 'fGen', 'fAnt'].forEach((id) => { document.getElementById(id).value = ''; });
+      ['fDep', 'fPue', 'fLid', 'fJef', 'fGen', 'fAnt'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
       marcarSeg(); pintar();
     };
     await pintar();
