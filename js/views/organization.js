@@ -6,6 +6,18 @@
 App.UI.route('organizacion', async function (main) {
   const R = App.Repos, U = App.UI;
   const emps = (await R.employeeRepository.all()).filter((e) => (e.estado || 'ACTIVO') === 'ACTIVO');
+  // Precargar TODAS las fotos una sola vez (evita una consulta por persona → despliegue instantáneo)
+  const fotosArr = await R.photoRepository.all();
+  const fotoMap = new Map(fotosArr.map((f) => [f.id, f.dataUrl]));
+  const COLORS = ['#00216f','#1a5fa8','#7dbfe6','#f3b24e','#5db9a3','#ce392c','#72bd53','#606060'];
+  const inicial = (n) => String(n||'').trim().split(/\s+/).slice(0,2).map((w)=>w[0]||'').join('').toUpperCase();
+  const colorDe = (n) => COLORS[[...String(n||'')].reduce((a,c)=>a+c.charCodeAt(0),0) % COLORS.length];
+  function avatarSync(e, size) {
+    size = size || 40;
+    const foto = e && fotoMap.get(e.id);
+    if (foto) return `<span class="avatar" style="width:${size}px;height:${size}px"><img src="${foto}" alt="" loading="lazy"></span>`;
+    return `<span class="avatar avatar--txt" style="width:${size}px;height:${size}px;background:${colorDe(e&&e.nombreCompleto)};font-size:${size*0.38}px">${U.esc(inicial(e&&e.nombreCompleto))}</span>`;
+  }
 
   const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
   const clean = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
@@ -93,13 +105,13 @@ App.UI.route('organizacion', async function (main) {
       <div style="display:flex;gap:8px"><button class="btn btn--ghost btn--sm" id="orgFull"><i class="ti ti-maximize"></i> Pantalla completa</button><button class="btn btn--ghost btn--sm" id="orgAll">Desplegar todo</button></div></div>
     <div class="org2-outer" id="orgOuter"><div class="org2-wrap"><div class="org2-scroll" id="org2"></div></div></div>`;
 
-  async function avatar(e, size) { return await U.avatarHTML(e, size); }
+  function avatar(e, size) { return avatarSync(e, size); }
 
   async function pintar() {
     const cont = document.getElementById('org2');
     // Cabeza
     let html = `<div class="org2-head">
-      <div class="org2-lider" data-emp="${raiz.id}">${await avatar(raiz, 46)}
+      <div class="org2-lider" data-emp="${raiz.id}">${avatar(raiz, 46)}
         <div><div class="org2-lider__n">${U.esc(raiz.nombreCompleto)}</div>
         <div class="org2-lider__s">${BANDERA(paisDe(raiz))} Líder de Créditos y Cobros</div></div>
       </div>
@@ -138,13 +150,13 @@ App.UI.route('organizacion', async function (main) {
           const otros = gente.filter((e) => !SUPERVISORES_VD.includes(norm(e.nombreCompleto)));
           for (const sup of supervisores.sort((a,b)=>SUPERVISORES_VD.indexOf(norm(a.nombreCompleto))-SUPERVISORES_VD.indexOf(norm(b.nombreCompleto)))) {
             const suyos = otros.filter((e) => norm(e.jefeNombre) === norm(sup.nombreCompleto));
-            html += `<div class="org2-sup"><div class="org2-sup__h" data-emp="${sup.id}">${await avatar(sup, 24)}<span>${U.esc(sup.nombreCompleto)}</span>${BANDERA(paisDe(sup))}<em>${U.esc(clean(sup.titulo) || 'Supervisor')}</em></div>`;
+            html += `<div class="org2-sup"><div class="org2-sup__h" data-emp="${sup.id}">${avatar(sup, 24)}<span>${U.esc(sup.nombreCompleto)}</span>${BANDERA(paisDe(sup))}<em>${U.esc(clean(sup.titulo) || 'Supervisor')}</em></div>`;
             const pmap = new Map();
             suyos.forEach((e) => { const p = paisDe(e); if (!pmap.has(p)) pmap.set(p, []); pmap.get(p).push(e); });
             for (const [pais, arr] of pmap) {
               html += `<div class="org2-pais org2-pais--sub"><div class="org2-pais__h">${BANDERA(pais)} <span>${U.esc(pais)}</span></div>`;
               for (const e of arr.sort((a,b)=>U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
-                html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 24)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
+                html += `<div class="org2-person" data-emp="${e.id}">${avatar(e, 24)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
               }
               html += `</div>`;
             }
@@ -156,7 +168,7 @@ App.UI.route('organizacion', async function (main) {
           if (sueltos.length) {
             html += `<div class="org2-sup"><div class="org2-sup__h"><span>Reportan directo al líder</span></div>`;
             for (const e of sueltos.sort((a,b)=>U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
-              html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 24)}<span>${U.esc(e.nombreCompleto)} <em class="org2-flag">${BANDERA(paisDe(e))}</em></span></div>`;
+              html += `<div class="org2-person" data-emp="${e.id}">${avatar(e, 24)}<span>${U.esc(e.nombreCompleto)} <em class="org2-flag">${BANDERA(paisDe(e))}</em></span></div>`;
             }
             html += `</div>`;
           }
@@ -164,7 +176,7 @@ App.UI.route('organizacion', async function (main) {
           for (const pais of paisesList) {
             html += `<div class="org2-pais"><div class="org2-pais__h">${BANDERA(pais)} <span>${U.esc(pais)}</span></div>`;
             for (const e of porPais.get(pais).sort((a, b) => U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
-              html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 26)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
+              html += `<div class="org2-person" data-emp="${e.id}">${avatar(e, 26)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
             }
             html += `</div>`;
           }
