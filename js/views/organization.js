@@ -50,20 +50,25 @@ App.UI.route('organizacion', async function (main) {
     if (!deptos.has(area)) deptos.set(area, { area, lider: null, gente: [] });
     deptos.get(area).gente.push(e);
   });
-  // Determinar líder de cada depto: el jefe directo más común de sus miembros
-  // (así KAM → Luis Yantuche aunque él pertenezca a otra área).
+  // Líder de cada depto:
+  //  1) el miembro que reporta directo a la raíz (Erwin) → dueño real de la caja (ej. Henry, Dennis)
+  //  2) si ninguno reporta a la raíz, el jefe más común de los miembros (ej. KAM → Luis Yantuche)
+  const nRaiz = norm(raiz && raiz.nombreCompleto);
   deptos.forEach((d) => {
-    const votos = new Map();
-    d.gente.forEach((e) => {
-      const jefe = porNombre.get(norm(e.jefeNombre));
-      if (jefe && jefe.id !== (raiz && raiz.id)) votos.set(jefe.id, (votos.get(jefe.id) || 0) + 1);
-    });
-    let liderId = null, max = 0;
-    votos.forEach((n, id) => { if (n > max) { max = n; liderId = id; } });
-    d.lider = (liderId && emps.find((e) => e.id === liderId))
+    let lider = d.gente.find((e) => norm(e.jefeNombre) === nRaiz || norm(e.ultimoLiderNombre) === nRaiz);
+    if (!lider) {
+      const votos = new Map();
+      d.gente.forEach((e) => {
+        const jefe = porNombre.get(norm(e.jefeNombre));
+        if (jefe && jefe.id !== (raiz && raiz.id)) votos.set(jefe.id, (votos.get(jefe.id) || 0) + 1);
+      });
+      let liderId = null, max = 0;
+      votos.forEach((n, id) => { if (n > max) { max = n; liderId = id; } });
+      lider = (liderId && emps.find((e) => e.id === liderId))
            || d.gente.find((e) => /líder|coordinador|encargado/i.test(clean(e.titulo)))
            || d.gente[0];
-    // Si el líder está dentro de la gente del depto, se saca de colaboradores
+    }
+    d.lider = lider;
     d.gente = d.gente.filter((e) => e.id !== (d.lider && d.lider.id));
   });
 
