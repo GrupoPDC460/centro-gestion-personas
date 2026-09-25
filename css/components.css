@@ -372,42 +372,35 @@ body.has-orgfull { overflow: hidden; }
 .switch input { accent-color: var(--orange); width: 16px; height: 16px; cursor: pointer; }
 .switch:hover { color: var(--text); }
 
-/* ===== Organigrama dinámico (drill-down) ===== */
-.org-top { display:flex; justify-content:center; margin-bottom:28px; }
-.org-lider { border:2px solid var(--navy) !important; }
-.org-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; max-width:760px; margin:0 auto; }
-.org-group { display:flex; flex-direction:column; align-items:center; gap:6px; padding:22px 16px; border-radius:16px;
-  background:#fff; border:1px solid #e6e8ef; cursor:pointer; transition:transform .15s, box-shadow .15s; }
-.org-group:hover { transform:translateY(-3px); box-shadow:0 10px 28px rgba(0,33,111,.12); border-color:var(--celeste); }
-.org-group__ico { width:46px; height:46px; display:grid; place-items:center; border-radius:12px;
-  background:color-mix(in srgb,var(--navy) 10%,transparent); color:var(--navy); font-size:22px; }
-.org-group__name { font-weight:700; color:var(--navy); font-size:1.05rem; }
-.org-group__meta { font-size:.8rem; color:#8a90a2; }
 
-.org-subs { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; }
-.org-sub { display:flex; flex-direction:column; gap:4px; padding:16px 18px; border-radius:14px; text-align:left;
-  background:#fff; border:1px solid #e6e8ef; cursor:pointer; transition:transform .15s, box-shadow .15s; }
-.org-sub:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(0,33,111,.1); border-color:var(--celeste); }
-.org-sub__name { font-weight:700; color:var(--navy); }
-.org-sub__lead { font-size:.86rem; color:#5a6072; }
-.org-sub__count { font-size:.76rem; color:#8a90a2; }
+/* ===== Organigrama estilo estructura CyC ===== */
+.org2-wrap { overflow-x:auto; padding-bottom:16px; }
+.org2-scroll { min-width:max-content; padding:8px 4px 20px; }
+.org2-head { display:flex; justify-content:center; }
+.org2-lider { display:flex; align-items:center; gap:12px; padding:14px 22px; border-radius:14px;
+  background:var(--navy); color:#fff; cursor:pointer; box-shadow:0 8px 24px rgba(0,33,111,.28); }
+.org2-lider__n { font-weight:800; font-size:1.02rem; }
+.org2-lider__s { font-size:.8rem; opacity:.8; }
+.org2-line { width:1px; height:22px; background:#b9c0d4; margin:0 auto; }
 
-.orgcard { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:12px;
-  background:#fff; border:1px solid #e6e8ef; cursor:pointer; transition:box-shadow .15s, border-color .15s; }
-.orgcard:hover { box-shadow:0 6px 18px rgba(0,33,111,.1); border-color:var(--celeste); }
-.orgcard--big { padding:12px 16px; }
-.orgcard__name { font-weight:700; color:var(--navy); font-size:.92rem; }
-.orgcard__sub { font-size:.78rem; color:#8a90a2; }
+.org2-cols { display:flex; gap:14px; align-items:flex-start; justify-content:center; padding-top:2px; position:relative; }
+.org2-cols::before { content:""; position:absolute; top:0; left:10%; right:10%; height:1px; background:#b9c0d4; }
+.org2-col { width:210px; flex:0 0 210px; position:relative; }
+.org2-col::before { content:""; position:absolute; top:-2px; left:50%; width:1px; height:12px; background:#b9c0d4; }
 
-/* Árbol jerárquico */
-.org-tree { overflow-x:auto; padding:10px 4px 20px; }
-.tnode { display:inline-flex; flex-direction:column; align-items:center; }
-.tnode > .orgcard { margin-bottom:14px; position:relative; }
-.tchildren { display:flex; gap:18px; align-items:flex-start; position:relative; padding-top:14px; }
-.tchildren::before { content:""; position:absolute; top:0; left:50%; width:1px; height:14px; background:#cfd4e0; }
-.tchildren > .tnode { position:relative; }
-.tchildren > .tnode::before { content:""; position:absolute; top:-14px; left:50%; width:1px; height:14px; background:#cfd4e0; }
-.tchildren > .tnode::after { content:""; position:absolute; top:-14px; left:0; right:0; height:1px; background:#cfd4e0; }
-.tchildren > .tnode:first-child::after { left:50%; }
-.tchildren > .tnode:last-child::after { right:50%; }
-.tchildren > .tnode:only-child::after { display:none; }
+.org2-dept { width:100%; text-align:left; display:flex; flex-direction:column; gap:3px; padding:12px 14px;
+  border:none; border-radius:12px 12px 0 0; background:var(--navy); color:#fff; cursor:pointer; margin-top:12px; }
+.org2-dept.is-open { border-radius:12px 12px 0 0; }
+.org2-dept__top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.org2-dept__name { font-weight:800; font-size:.92rem; }
+.org2-dept__lead { font-size:.8rem; opacity:.85; font-style:italic; }
+.org2-dept__count { font-size:.72rem; opacity:.7; }
+
+.org2-people { border:1px solid #dfe3ee; border-top:none; border-radius:0 0 12px 12px; background:#fff; padding:10px 12px; }
+.org2-pais { margin-bottom:10px; }
+.org2-pais:last-child { margin-bottom:0; }
+.org2-pais__h { font-weight:700; font-size:.78rem; color:var(--navy); padding-bottom:4px; margin-bottom:6px;
+  border-bottom:1px solid #eef0f6; }
+.org2-person { display:flex; align-items:center; gap:8px; padding:4px 4px; border-radius:8px; cursor:pointer;
+  font-size:.82rem; color:#3a4056; transition:background .12s; }
+.org2-person:hover { background:#f2f5fb; color:var(--navy); }
