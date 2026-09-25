@@ -429,6 +429,9 @@ body.org-fs #orgOuter {
 body.org-fs .org2-wrap { min-height:calc(100vh - 110px); }
 body.org-fs #orgFull { position:fixed; top:16px; right:24px; z-index:10000; }
 
-.flagico { border-radius:2px; vertical-align:middle; flex-shrink:0; }
+.flagico { border-radius:2px; vertical-align:middle; flex-shrink:0; box-shadow:0 0 0 1px rgba(0,0,0,.1); object-fit:cover; }
 .org2-pais__h { display:flex; align-items:center; gap:6px; }
-.org2-flag .flagico { width:15px; height:10px; }
+.org2-flag .flagico { width:16px; height:12px; }
+.org2-sup__h .flagico { margin-left:2px; }
+.org2-dept__lead .flagico { width:16px; height:12px; }
+.org2-lider__s .flagico { width:16px; height:12px; }

@@ -12,21 +12,16 @@ App.UI.route('organizacion', async function (main) {
   const porNombre = new Map(emps.map((e) => [norm(e.nombreCompleto), e]));
 
   // Bandera por país
-  // Banderas como SVG (los emoji no se ven en Windows/web)
-  const FLAGS = {
-    'guatemala': ['#4997D0','#fff','#4997D0'], 'el salvador': ['#0F47AF','#fff','#0F47AF'],
-    'república dominicana': ['#002D62','#fff','#CE1126'], 'republica dominicana': ['#002D62','#fff','#CE1126'],
-    'perú': ['#D91023','#fff','#D91023'], 'peru': ['#D91023','#fff','#D91023'],
-    'honduras': ['#0073CF','#fff','#0073CF'], 'nicaragua': ['#0067C6','#fff','#0067C6'],
-    'panamá': ['#005293','#fff','#D21034'], 'panama': ['#005293','#fff','#D21034'],
+  // Banderas reales (imágenes de flagcdn.com)
+  const ISO = {
+    'guatemala': 'gt', 'el salvador': 'sv', 'república dominicana': 'do', 'republica dominicana': 'do',
+    'perú': 'pe', 'peru': 'pe', 'honduras': 'hn', 'nicaragua': 'ni', 'panamá': 'pa', 'panama': 'pa',
+    'costa rica': 'cr', 'méxico': 'mx', 'mexico': 'mx',
   };
   function BANDERA(pais) {
-    const c = FLAGS[norm(pais)] || ['#94a3b8','#e2e8f0','#94a3b8'];
-    const orient = /rep[uú]blica|panam/i.test(pais) ? 'v' : 'h';
-    if (orient === 'v') {
-      return `<svg class="flagico" viewBox="0 0 18 12" width="18" height="12"><rect width="6" height="12" fill="${c[0]}"/><rect x="6" width="6" height="12" fill="${c[1]}"/><rect x="12" width="6" height="12" fill="${c[2]}"/><rect width="18" height="12" fill="none" stroke="rgba(0,0,0,.15)"/></svg>`;
-    }
-    return `<svg class="flagico" viewBox="0 0 18 12" width="18" height="12"><rect width="18" height="4" fill="${c[0]}"/><rect y="4" width="18" height="4" fill="${c[1]}"/><rect y="8" width="18" height="4" fill="${c[2]}"/><rect width="18" height="12" fill="none" stroke="rgba(0,0,0,.15)"/></svg>`;
+    const code = ISO[norm(pais)];
+    if (!code) return '';
+    return `<img class="flagico" src="https://flagcdn.com/32x24/${code}.png" srcset="https://flagcdn.com/64x48/${code}.png 2x" width="20" height="15" alt="${U.esc(pais)}" loading="lazy">`;
   }
   const paisValido = (p) => Object.keys(BANDERA).includes(norm(p));
 
@@ -106,7 +101,7 @@ App.UI.route('organizacion', async function (main) {
     let html = `<div class="org2-head">
       <div class="org2-lider" data-emp="${raiz.id}">${await avatar(raiz, 46)}
         <div><div class="org2-lider__n">${U.esc(raiz.nombreCompleto)}</div>
-        <div class="org2-lider__s">Líder de Créditos y Cobros</div></div>
+        <div class="org2-lider__s">${BANDERA(paisDe(raiz))} Líder de Créditos y Cobros</div></div>
       </div>
     </div><div class="org2-line"></div>`;
 
@@ -130,7 +125,7 @@ App.UI.route('organizacion', async function (main) {
             <span class="org2-dept__name">${U.esc(d.area)}</span>
             <i class="ti ti-chevron-${open ? 'up' : 'down'}"></i>
           </div>
-          <span class="org2-dept__lead">${d.lider ? U.esc(d.lider.nombreCompleto) : '—'}</span>
+          <span class="org2-dept__lead">${d.lider ? BANDERA(paisDe(d.lider)) + ' ' + U.esc(d.lider.nombreCompleto) : '—'}</span>
           <span class="org2-dept__count">${gente.length} colaborador${gente.length === 1 ? '' : 'es'}</span>
         </button>`;
 
@@ -143,7 +138,7 @@ App.UI.route('organizacion', async function (main) {
           const otros = gente.filter((e) => !SUPERVISORES_VD.includes(norm(e.nombreCompleto)));
           for (const sup of supervisores.sort((a,b)=>SUPERVISORES_VD.indexOf(norm(a.nombreCompleto))-SUPERVISORES_VD.indexOf(norm(b.nombreCompleto)))) {
             const suyos = otros.filter((e) => norm(e.jefeNombre) === norm(sup.nombreCompleto));
-            html += `<div class="org2-sup"><div class="org2-sup__h" data-emp="${sup.id}">${await avatar(sup, 24)}<span>${U.esc(sup.nombreCompleto)}</span><em>${U.esc(clean(sup.titulo) || 'Supervisor')}</em></div>`;
+            html += `<div class="org2-sup"><div class="org2-sup__h" data-emp="${sup.id}">${await avatar(sup, 24)}<span>${U.esc(sup.nombreCompleto)}</span>${BANDERA(paisDe(sup))}<em>${U.esc(clean(sup.titulo) || 'Supervisor')}</em></div>`;
             const pmap = new Map();
             suyos.forEach((e) => { const p = paisDe(e); if (!pmap.has(p)) pmap.set(p, []); pmap.get(p).push(e); });
             for (const [pais, arr] of pmap) {
