@@ -1,7 +1,29 @@
 /* views/movements.js — Altas y Bajas (históricos + gráfico mensual) */
 App.UI.route('altas-bajas', async function (main) {
   const R = App.Repos, C = App.Calc, U = App.UI, CH = App.Charts;
-  const emps = await R.employeeRepository.all();
+  const allEmps = await R.employeeRepository.all();
+  const _c = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
+  const areas = [...new Set(allEmps.map((e) => _c(e.areaFinalReal)).filter(Boolean))].sort();
+  const lideres = [...new Set(allEmps.map((e) => _c(e.ultimoLiderNombre || e.supervisorNombre)).filter(Boolean))].sort();
+  const jefes = [...new Set(allEmps.map((e) => _c(e.jefeNombre)).filter(Boolean))].sort();
+  const st = { area: '', lid: '', jef: '' };
+  main.innerHTML = `
+    <div class="page-head"><h1>Altas y Bajas</h1></div>
+    <div class="filters"><div class="filters__row">
+      <select id="mArea" class="input input--pill"><option value="">Departamento / Área: todos</option>${areas.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="mLid" class="input input--pill"><option value="">Líder directo: todos</option>${lideres.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="mJef" class="input input--pill"><option value="">Jefe directo: todos</option>${jefes.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <button class="btn btn--ghost btn--sm" id="mLimpiar">Limpiar</button>
+    </div></div>
+    <div id="abContent"></div>`;
+  const filtered = () => allEmps.filter((e) => {
+    if (st.area && _c(e.areaFinalReal) !== st.area) return false;
+    if (st.lid && _c(e.ultimoLiderNombre || e.supervisorNombre) !== st.lid) return false;
+    if (st.jef && _c(e.jefeNombre) !== st.jef) return false;
+    return true;
+  });
+  async function draw() {
+  const emps = filtered();
   const now = new Date(), y = now.getFullYear();
 
   const mesesLbl = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -21,8 +43,7 @@ App.UI.route('altas-bajas', async function (main) {
 
   const row = async (e, campo) => `<tr class="rowlink" data-id="${e.id}"><td class="cell-person">${await U.avatarHTML(e, 32)}<b>${U.esc(e.nombreCompleto)}</b></td><td>${U.esc(e.codigo)}</td><td>${U.fechaCorta(e[campo])}</td></tr>`;
 
-  main.innerHTML = `
-    <div class="page-head"><h1>Altas y Bajas</h1></div>
+  document.getElementById('abContent').innerHTML = `
     <div class="kpi-grid">
       <div class="kpi kpi--good"><div class="kpi__val">${mm.altas}</div><div class="kpi__lbl">Altas del mes</div></div>
       <div class="kpi"><div class="kpi__val">${tt.altas}</div><div class="kpi__lbl">Altas del trimestre</div></div>
@@ -37,14 +58,30 @@ App.UI.route('altas-bajas', async function (main) {
       <div class="card"><h3 class="card__title">Bajas ${y} (${bajas.length})</h3><div class="table-wrap">${bajas.length ? `<table class="table"><tbody>${(await Promise.all(bajas.map((e) => row(e, 'fechaBaja')))).join('')}</tbody></table>` : '<p class="muted">Sin bajas este año.</p>'}</div></div>
     </div>`;
   main.querySelectorAll('.rowlink').forEach((tr) => tr.onclick = () => App.UI.navigate('empleados', { id: tr.dataset.id }));
+  }
+  await draw();
+  document.getElementById('mArea').onchange = (e) => { st.area = e.target.value; draw(); };
+  document.getElementById('mLid').onchange = (e) => { st.lid = e.target.value; draw(); };
+  document.getElementById('mJef').onchange = (e) => { st.jef = e.target.value; draw(); };
+  document.getElementById('mLimpiar').onclick = () => { st.area=''; st.lid=''; st.jef=''; ['mArea','mLid','mJef'].forEach((id)=>{const el=document.getElementById(id); if(el) el.value='';}); draw(); };
 });
 
 /* views/turnover.js — Rotación */
 App.UI.route('rotacion', async function (main) {
-  const R = App.Repos, C = App.Calc, CH = App.Charts;
-  const emps = await R.employeeRepository.all();
+  const R = App.Repos, C = App.Calc, CH = App.Charts, U = App.UI;
+  const allEmps = await R.employeeRepository.all();
   const now = new Date(), y = now.getFullYear();
-  const st = { modo: 'anio' };
+  const st = { modo: 'anio', area: '', lid: '', jef: '' };
+  const _c = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
+  const areas = [...new Set(allEmps.map((e) => _c(e.areaFinalReal)).filter(Boolean))].sort();
+  const lideres = [...new Set(allEmps.map((e) => _c(e.ultimoLiderNombre || e.supervisorNombre)).filter(Boolean))].sort();
+  const jefes = [...new Set(allEmps.map((e) => _c(e.jefeNombre)).filter(Boolean))].sort();
+  const filtered = () => allEmps.filter((e) => {
+    if (st.area && _c(e.areaFinalReal) !== st.area) return false;
+    if (st.lid && _c(e.ultimoLiderNombre || e.supervisorNombre) !== st.lid) return false;
+    if (st.jef && _c(e.jefeNombre) !== st.jef) return false;
+    return true;
+  });
 
   function rango() {
     if (st.modo === 'mes') return [new Date(y, now.getMonth(), 1), new Date(y, now.getMonth() + 1, 0)];
@@ -54,6 +91,7 @@ App.UI.route('rotacion', async function (main) {
   }
 
   function pintar() {
+    const emps = filtered();
     const [d1, d2] = rango();
     const from = d1.toISOString().slice(0, 10), to = d2.toISOString().slice(0, 10);
     const hcI = C.headcountA(emps, from), hcF = C.headcountA(emps, to);
@@ -83,9 +121,15 @@ App.UI.route('rotacion', async function (main) {
       <select id="modo" class="input">
         <option value="mes">Mes</option><option value="trim">Trimestre</option><option value="sem">Semestre</option><option value="anio" selected>Año</option>
       </select>
+      <select id="rArea" class="input"><option value="">Departamento / Área: todos</option>${areas.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="rLid" class="input"><option value="">Líder: todos</option>${lideres.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="rJef" class="input"><option value="">Jefe: todos</option>${jefes.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
       <span class="muted">Fórmula: bajas ÷ promedio de plantilla × 100</span></div>
     <div id="rotOut"></div>`;
   document.getElementById('modo').onchange = (e) => { st.modo = e.target.value; pintar(); };
+  document.getElementById('rArea').onchange = (e) => { st.area = e.target.value; pintar(); };
+  document.getElementById('rLid').onchange = (e) => { st.lid = e.target.value; pintar(); };
+  document.getElementById('rJef').onchange = (e) => { st.jef = e.target.value; pintar(); };
   pintar();
 });
 
