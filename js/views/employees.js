@@ -11,6 +11,7 @@
     const posName = Object.fromEntries(puestos.map((d) => [d.id, d.nombre]));
     // Listas de líderes y jefes directos (valores de texto, únicos y válidos)
     const _clean = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
+    const areas = [...new Set(emps.map((e) => _clean(e.areaFinalReal)).filter(Boolean))].sort();
     const lideres = [...new Set(emps.map((e) => _clean(e.ultimoLiderNombre || e.supervisorNombre)).filter(Boolean))].sort();
     const jefes = [...new Set(emps.map((e) => _clean(e.jefeNombre)).filter(Boolean))].sort();
 
@@ -31,7 +32,7 @@
             <button class="segmented__b" data-est="ACTIVO">Activos</button>
             <button class="segmented__b" data-est="INACTIVO">Inactivos</button>
           </div>
-          <select id="fDep" class="input input--pill"><option value="">Departamento: todos</option>${deptos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
+          <select id="fDep" class="input input--pill"><option value="">Departamento / Área: todos</option>${areas.map((n) => `<option value="${U().esc(n)}">${U().esc(n)}</option>`).join('')}</select>
           <select id="fPue" class="input input--pill"><option value="">Puesto: todos</option>${puestos.map((d) => `<option value="${d.id}">${U().esc(d.nombre)}</option>`).join('')}</select>
           <select id="fLid" class="input input--pill"><option value="">Líder directo: todos</option>${lideres.map((n) => `<option value="${U().esc(n)}">${U().esc(n)}</option>`).join('')}</select>
           <select id="fJef" class="input input--pill"><option value="">Jefe directo: todos</option>${jefes.map((n) => `<option value="${U().esc(n)}">${U().esc(n)}</option>`).join('')}</select>
@@ -47,7 +48,7 @@
     async function pintar() {
       const q = st.q.toLowerCase();
       let list = emps.filter((e) => {
-        if (st.dep && String(e.departamentoId) !== st.dep) return false;
+        if (st.dep && _clean(e.areaFinalReal) !== st.dep) return false;
         if (st.pue && String(e.puestoId) !== st.pue) return false;
         if (st.lid && _clean(e.ultimoLiderNombre || e.supervisorNombre) !== st.lid) return false;
         if (st.jef && _clean(e.jefeNombre) !== st.jef) return false;
@@ -107,7 +108,7 @@
           return `<tr data-id="${e.id}" class="rowlink">
             <td class="cell-person">${await U().avatarHTML(e, 36)}<div><b>${U().esc(e.nombreCompleto)}</b><span class="muted">${U().esc(e.correoCorporativo || e.correoPersonal || '')}</span></div></td>
             <td>${U().esc(e.codigo)}<span class="muted"> · JDE ${U().esc(e.codigoJDE || '—')}</span></td>
-            <td>${U().esc(depName[e.departamentoId] || '—')}</td>
+            <td>${U().esc(e.areaFinalReal || '—')}</td>
             <td>${U().esc(posName[e.puestoId] || '—')}</td>
             <td>${ant.text}</td>
             <td class="estado-cell">${selEstado(e)}${selUbic(e)}</td>
@@ -317,7 +318,7 @@
       };
       App.Absences.wire(mo.el, e, refrescarAus);
 
-      function depName(x) { return (deptos.find((d) => d.id === x.departamentoId) || {}).nombre || '—'; }
+      function depName(x) { return x.areaFinalReal || '—'; }
       function posName(x) { return (puestos.find((d) => d.id === x.puestoId) || {}).nombre || '—'; }
 
       mo.el.querySelector('#editBtn').onclick = () => { mo.close(); form(e); };
