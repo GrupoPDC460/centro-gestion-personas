@@ -374,8 +374,12 @@ body.has-orgfull { overflow: hidden; }
 
 
 /* ===== Organigrama estilo estructura CyC ===== */
-.org2-wrap { overflow-x:auto; padding-bottom:16px; }
-.org2-scroll { min-width:max-content; padding:8px 4px 20px; }
+.org2-wrap { overflow-x:auto; padding-bottom:4px; scrollbar-gutter:stable; min-height:calc(100vh - 240px); display:flex; flex-direction:column; }
+.org2-scroll { min-width:max-content; padding:8px 4px 8px; margin-bottom:auto; }
+/* barra de scroll horizontal siempre visible al fondo */
+.org2-wrap::-webkit-scrollbar { height:12px; }
+.org2-wrap::-webkit-scrollbar-thumb { background:#b9c0d4; border-radius:6px; }
+.org2-wrap::-webkit-scrollbar-track { background:#eef1f8; border-radius:6px; }
 .org2-head { display:flex; justify-content:center; }
 .org2-lider { display:flex; align-items:center; gap:12px; padding:14px 22px; border-radius:14px;
   background:var(--navy); color:#fff; cursor:pointer; box-shadow:0 8px 24px rgba(0,33,111,.28); }
@@ -420,6 +424,11 @@ body.has-orgfull { overflow: hidden; }
 body.org-fs { overflow:hidden; }
 body.org-fs #orgOuter {
   position:fixed; inset:0; z-index:9999; background:#eef1f8;
-  padding:70px 24px 24px; overflow:auto;
+  padding:70px 24px 24px; overflow:auto; display:flex; flex-direction:column;
 }
+body.org-fs .org2-wrap { min-height:calc(100vh - 110px); }
 body.org-fs #orgFull { position:fixed; top:16px; right:24px; z-index:10000; }
+
+.flagico { border-radius:2px; vertical-align:middle; flex-shrink:0; }
+.org2-pais__h { display:flex; align-items:center; gap:6px; }
+.org2-flag .flagico { width:15px; height:10px; }

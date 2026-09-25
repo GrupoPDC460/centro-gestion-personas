@@ -12,10 +12,22 @@ App.UI.route('organizacion', async function (main) {
   const porNombre = new Map(emps.map((e) => [norm(e.nombreCompleto), e]));
 
   // Bandera por país
-  const BANDERA = {
-    'guatemala': '🇬🇹', 'el salvador': '🇸🇻', 'república dominicana': '🇩🇴', 'republica dominicana': '🇩🇴',
-    'perú': '🇵🇪', 'peru': '🇵🇪', 'honduras': '🇭🇳', 'nicaragua': '🇳🇮', 'panamá': '🇵🇦', 'panama': '🇵🇦',
+  // Banderas como SVG (los emoji no se ven en Windows/web)
+  const FLAGS = {
+    'guatemala': ['#4997D0','#fff','#4997D0'], 'el salvador': ['#0F47AF','#fff','#0F47AF'],
+    'república dominicana': ['#002D62','#fff','#CE1126'], 'republica dominicana': ['#002D62','#fff','#CE1126'],
+    'perú': ['#D91023','#fff','#D91023'], 'peru': ['#D91023','#fff','#D91023'],
+    'honduras': ['#0073CF','#fff','#0073CF'], 'nicaragua': ['#0067C6','#fff','#0067C6'],
+    'panamá': ['#005293','#fff','#D21034'], 'panama': ['#005293','#fff','#D21034'],
   };
+  function BANDERA(pais) {
+    const c = FLAGS[norm(pais)] || ['#94a3b8','#e2e8f0','#94a3b8'];
+    const orient = /rep[uú]blica|panam/i.test(pais) ? 'v' : 'h';
+    if (orient === 'v') {
+      return `<svg class="flagico" viewBox="0 0 18 12" width="18" height="12"><rect width="6" height="12" fill="${c[0]}"/><rect x="6" width="6" height="12" fill="${c[1]}"/><rect x="12" width="6" height="12" fill="${c[2]}"/><rect width="18" height="12" fill="none" stroke="rgba(0,0,0,.15)"/></svg>`;
+    }
+    return `<svg class="flagico" viewBox="0 0 18 12" width="18" height="12"><rect width="18" height="4" fill="${c[0]}"/><rect y="4" width="18" height="4" fill="${c[1]}"/><rect y="8" width="18" height="4" fill="${c[2]}"/><rect width="18" height="12" fill="none" stroke="rgba(0,0,0,.15)"/></svg>`;
+  }
   const paisValido = (p) => Object.keys(BANDERA).includes(norm(p));
 
   // Área (real; si vacía hereda del jefe)
@@ -135,7 +147,7 @@ App.UI.route('organizacion', async function (main) {
             const pmap = new Map();
             suyos.forEach((e) => { const p = paisDe(e); if (!pmap.has(p)) pmap.set(p, []); pmap.get(p).push(e); });
             for (const [pais, arr] of pmap) {
-              html += `<div class="org2-pais org2-pais--sub"><div class="org2-pais__h">${BANDERA[norm(pais)] || '🏳️'} ${U.esc(pais)}</div>`;
+              html += `<div class="org2-pais org2-pais--sub"><div class="org2-pais__h">${BANDERA(pais)} <span>${U.esc(pais)}</span></div>`;
               for (const e of arr.sort((a,b)=>U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
                 html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 24)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
               }
@@ -149,13 +161,13 @@ App.UI.route('organizacion', async function (main) {
           if (sueltos.length) {
             html += `<div class="org2-sup"><div class="org2-sup__h"><span>Reportan directo al líder</span></div>`;
             for (const e of sueltos.sort((a,b)=>U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
-              html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 24)}<span>${U.esc(e.nombreCompleto)} <em class="org2-flag">${BANDERA[norm(paisDe(e))] || ''}</em></span></div>`;
+              html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 24)}<span>${U.esc(e.nombreCompleto)} <em class="org2-flag">${BANDERA(paisDe(e))}</em></span></div>`;
             }
             html += `</div>`;
           }
         } else {
           for (const pais of paisesList) {
-            html += `<div class="org2-pais"><div class="org2-pais__h">${BANDERA[norm(pais)] || '🏳️'} ${U.esc(pais)}</div>`;
+            html += `<div class="org2-pais"><div class="org2-pais__h">${BANDERA(pais)} <span>${U.esc(pais)}</span></div>`;
             for (const e of porPais.get(pais).sort((a, b) => U.esc(a.nombreCompleto).localeCompare(b.nombreCompleto))) {
               html += `<div class="org2-person" data-emp="${e.id}">${await avatar(e, 26)}<span>${U.esc(e.nombreCompleto)}</span></div>`;
             }
