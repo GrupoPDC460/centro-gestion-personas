@@ -3,6 +3,36 @@ App.UI.route('dashboard', async function (main) {
   const R = App.Repos, C = App.Calc, U = App.UI, CH = App.Charts;
   const [emps, deptos] = await Promise.all([R.employeeRepository.all(), R.departmentRepository.all()]);
   const depName = Object.fromEntries(deptos.map((d) => [d.id, d.nombre]));
+
+  // Listas para filtros (área, líder directo, jefe directo)
+  const _c = (v) => (v && String(v).trim() && String(v).trim() !== '0') ? String(v).trim() : '';
+  const areas = [...new Set(emps.map((e) => _c(e.areaFinalReal)).filter(Boolean))].sort();
+  const lideres = [...new Set(emps.map((e) => _c(e.ultimoLiderNombre || e.supervisorNombre)).filter(Boolean))].sort();
+  const jefes = [...new Set(emps.map((e) => _c(e.jefeNombre)).filter(Boolean))].sort();
+  const st = { area: '', lid: '', jef: '' };
+
+  main.innerHTML = `
+    <div class="page-head"><div><h1>Dashboard</h1><p class="muted">Panorama del personal · ${new Date().toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
+      <button class="btn btn--primary" onclick="location.hash='#empleados'">Ver colaboradores</button></div>
+    <div class="filters"><div class="filters__row">
+      <select id="dArea" class="input input--pill"><option value="">Departamento / Área: todos</option>${areas.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="dLid" class="input input--pill"><option value="">Líder directo: todos</option>${lideres.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <select id="dJef" class="input input--pill"><option value="">Jefe directo: todos</option>${jefes.map((n) => `<option value="${U.esc(n)}">${U.esc(n)}</option>`).join('')}</select>
+      <button class="btn btn--ghost btn--sm" id="dLimpiar">Limpiar</button>
+    </div></div>
+    <div id="dashContent"></div>`;
+
+  function filtered() {
+    return emps.filter((e) => {
+      if (st.area && _c(e.areaFinalReal) !== st.area) return false;
+      if (st.lid && _c(e.ultimoLiderNombre || e.supervisorNombre) !== st.lid) return false;
+      if (st.jef && _c(e.jefeNombre) !== st.jef) return false;
+      return true;
+    });
+  }
+
+  async function draw() {
+    const emps = filtered();
   const activos = emps.filter((e) => e.estado === 'ACTIVO');
   const hombres = activos.filter((e) => /^m/i.test(e.genero)).length;
   const mujeres = activos.filter((e) => /^f/i.test(e.genero)).length;
@@ -42,9 +72,7 @@ App.UI.route('dashboard', async function (main) {
 
   const kpi = (val, lbl, cls) => `<div class="kpi ${cls || ''}"><div class="kpi__val">${val}</div><div class="kpi__lbl">${lbl}</div></div>`;
 
-  main.innerHTML = `
-    <div class="page-head"><div><h1>Dashboard</h1><p class="muted">Panorama del personal · ${now.toLocaleDateString('es-GT', { day: 'numeric', month: 'long', year: 'numeric' })}</p></div>
-      <button class="btn btn--primary" onclick="location.hash='#empleados'">Ver colaboradores</button></div>
+  document.getElementById('dashContent').innerHTML = `
     ${activos.length === 0 ? emptyState() : ''}
     <div class="kpi-grid">
       ${kpi(activos.length, 'Activos', 'kpi--primary')}
@@ -76,6 +104,17 @@ App.UI.route('dashboard', async function (main) {
       <div class="card"><h3 class="card__title">Antigüedad por rango</h3>${CH.bars(antigData)}</div>
       <div class="card"><h3 class="card__title">Cumpleaños próximos</h3>${await proximosHTML(cumple.proximos.slice(0, 6))}</div>
     </div>`;
+  }
+
+  await draw();
+  document.getElementById('dArea').onchange = (e) => { st.area = e.target.value; draw(); };
+  document.getElementById('dLid').onchange = (e) => { st.lid = e.target.value; draw(); };
+  document.getElementById('dJef').onchange = (e) => { st.jef = e.target.value; draw(); };
+  document.getElementById('dLimpiar').onclick = () => {
+    st.area = ''; st.lid = ''; st.jef = '';
+    ['dArea', 'dLid', 'dJef'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+    draw();
+  };
 
   function emptyState() {
     return `<div class="empty"><h3>Aún no hay colaboradores</h3><p>Importa el Excel para comenzar. Los datos se guardan localmente en tu navegador.</p>
