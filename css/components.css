@@ -404,3 +404,22 @@ body.has-orgfull { overflow: hidden; }
 .org2-person { display:flex; align-items:center; gap:8px; padding:4px 4px; border-radius:8px; cursor:pointer;
   font-size:.82rem; color:#3a4056; transition:background .12s; }
 .org2-person:hover { background:#f2f5fb; color:var(--navy); }
+
+/* Venta Directa por supervisor */
+.org2-sup { margin-bottom:10px; padding:8px; border-radius:10px; background:#f5f7fc; border:1px solid #e6eaf3; }
+.org2-sup:last-child { margin-bottom:0; }
+.org2-sup__h { display:flex; align-items:center; gap:8px; font-weight:700; font-size:.82rem; color:var(--navy);
+  padding-bottom:6px; margin-bottom:6px; border-bottom:1px solid #e0e5f0; cursor:pointer; }
+.org2-sup__h em { font-style:normal; font-weight:400; font-size:.72rem; color:#8a90a2; margin-left:auto; }
+.org2-pais--sub { margin-bottom:6px; }
+.org2-pais--sub .org2-pais__h { font-size:.72rem; border:none; padding-bottom:2px; margin-bottom:2px; color:#5a6072; }
+.org2-pais__empty { font-size:.74rem; color:#a2a8ba; padding:2px 4px; }
+.org2-flag { font-style:normal; }
+
+/* Pantalla completa */
+body.org-fs { overflow:hidden; }
+body.org-fs #orgOuter {
+  position:fixed; inset:0; z-index:9999; background:#eef1f8;
+  padding:70px 24px 24px; overflow:auto;
+}
+body.org-fs #orgFull { position:fixed; top:16px; right:24px; z-index:10000; }
