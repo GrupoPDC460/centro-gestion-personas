@@ -44,16 +44,11 @@ App.UI.route('organizacion', async function (main) {
     const j = porNombre.get(norm(e.jefeNombre));
     return j ? clean(j.areaFinalReal) : 'Sin área';
   };
-  // País: si reporta a Oliver o Daniel → Guatemala (regla de negocio)
   const OLIVER = 'oliver arturo santos reyes', DANIEL = 'daniel michael enrique monge lopez';
   const YOSELIN = 'yoselin de los santos garcía';
   const SUPERVISORES_VD = [DANIEL, OLIVER, YOSELIN]; // agrupación especial de Venta Directa
-  const paisDe = (e) => {
-    const jefe = norm(e.jefeNombre);
-    if (jefe === OLIVER || jefe === DANIEL) return 'Guatemala';
-    const p = clean(e.pais);
-    return paisValido(p) ? p : 'Guatemala';
-  };
+  // País real de cada persona (desde los datos). Sin reglas forzadas.
+  const paisDe = (e) => clean(e && e.pais) || 'Sin país';
 
   // Raíz: líder de Créditos y Cobros
   const raiz = emps.find((e) => norm(e.areaFinalReal) === 'créditos y cobros' && clean(e.titulo).toLowerCase().includes('líder'))
