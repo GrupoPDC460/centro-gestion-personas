@@ -388,12 +388,16 @@ body.has-orgfull { overflow: hidden; }
 .org2-line { width:1px; height:22px; background:#b9c0d4; margin:0 auto; }
 
 .org2-cols { display:flex; gap:14px; align-items:flex-start; justify-content:center; padding-top:2px; position:relative; }
-.org2-cols::before { content:""; position:absolute; top:0; left:10%; right:10%; height:1px; background:#b9c0d4; }
+.org2-cols::before { content:""; position:absolute; top:0; left:105px; right:105px; height:1px; background:#b9c0d4; }
 .org2-col { width:210px; flex:0 0 210px; position:relative; }
 .org2-col::before { content:""; position:absolute; top:-2px; left:50%; width:1px; height:12px; background:#b9c0d4; }
 
 .org2-dept { width:100%; text-align:left; display:flex; flex-direction:column; gap:3px; padding:12px 14px;
-  border:none; border-radius:12px 12px 0 0; background:var(--navy); color:#fff; cursor:pointer; margin-top:12px; }
+  border:none; border-radius:12px; background:var(--navy); color:#fff; cursor:pointer; margin-top:12px;
+  min-height:104px; justify-content:flex-start; box-sizing:border-box; }
+.org2-dept.is-open { border-radius:12px 12px 0 0; }
+.org2-dept__name { min-height:38px; display:flex; align-items:flex-start; }
+.org2-dept__lead { display:flex; align-items:center; gap:6px; min-height:32px; }
 .org2-dept.is-open { border-radius:12px 12px 0 0; }
 .org2-dept__top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .org2-dept__name { font-weight:800; font-size:.92rem; }
